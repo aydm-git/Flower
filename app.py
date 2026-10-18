@@ -9,7 +9,7 @@ products = [
     
     {'id': 3, 'name': 'Микс-букет', 'price': 3200, 'img': '/static/images/mix.jpeg'}, 
     
-    {'id': 4, 'name': 'Цветы в коробке', 'price': 4000, 'img': '/static/image/box.jpg'},
+    {'id': 4, 'name': 'Цветы в коробке', 'price': 4000, 'img': '/static/images/box.jpg'},
 ]
 
 @app.route("/", methods=["GET", "POST"])
