@@ -2,9 +2,12 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 import openpyxl
 import os
 from datetime import datetime
+from werkzeug.security import check_password_hash
 
 app = Flask(__name__)
 app.secret_key = 'sumb123'
+USERNAME = "aydm123"
+PASSWORD_HASH = "scrypt:32768:8:1$YVFIfcPjDBHcZJTi$c44eece5ff2f6057d2ee3cc5217cf093cd9b1746efe2505b91c7153e93aafaebb24191cdc5dc575701d95345ad953d1e9f9e1caa87fccb36ea378e65ffb6ff5d"
 
 EXCEL_FILE = "orders.xlsx"
 
@@ -61,7 +64,7 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-        if username == "aydm123" and password == "sumb":
+        if username == USERNAME and check_password_hash(PASSWORD_HASH, password):
             session["logged_in"] = True
             return redirect(url_for("admin"))
         else:
