@@ -1,4 +1,5 @@
 orders.xlsx
+flower.db
 venv/
 __pycache__/
 *.pyc
