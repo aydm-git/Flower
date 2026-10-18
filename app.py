@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, session, redirect, url_for, flash
-import openpyxl
-import os
+from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from werkzeug.security import check_password_hash
 
@@ -9,7 +8,16 @@ app.secret_key = 'sumb123'
 USERNAME = "aydm123"
 PASSWORD_HASH = "scrypt:32768:8:1$YVFIfcPjDBHcZJTi$c44eece5ff2f6057d2ee3cc5217cf093cd9b1746efe2505b91c7153e93aafaebb24191cdc5dc575701d95345ad953d1e9f9e1caa87fccb36ea378e65ffb6ff5d"
 
-EXCEL_FILE = "orders.xlsx"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///flower.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(50), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    phone = db.Column(db.String(20), nullable=False)
+    flower = db.Column(db.String(255), nullable=False)
 
 products = [
     {'id': 1, 'name': 'Букет роз', 'price': 2500, 'img': '/static/images/roses.jpeg'},
@@ -18,28 +26,8 @@ products = [
     {'id': 4, 'name': 'Цветы в коробке', 'price': 4000, 'img': '/static/images/box.jpg'},
 ]
 
-def init_excel():
-    if not os.path.exists(EXCEL_FILE):
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Заказы"
-        ws.append(["ID", "Дата", "Имя", "Телефон", "Букет"])
-        wb.save(EXCEL_FILE)
-
-def save_to_excel(name, phone, flower):
-    try:
-        wb = openpyxl.load_workbook(EXCEL_FILE)
-        ws = wb.active
-        next_id = ws.max_row
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ws.append([next_id, now, name, phone, flower])
-        wb.save(EXCEL_FILE)
-        return True
-    except Exception as e:
-        print(f"[EXCEL ERROR] {e}")
-        return False
-
-init_excel()
+with app.app_context():
+    db.create_all()
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -55,9 +43,15 @@ def home():
         if not name or not phone:
             message_type = "error_empty"
         else:
-            if save_to_excel(name, phone, flower):
+            try:
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                new_order = Order(date=now, name=name, phone=phone, flower=flower)
+                db.session.add(new_order)
+                db.session.commit()
                 message_type = "success"
-            else:
+            except Exception as e:
+                print(f"[DB ERROR] {e}")
+                db.session.rollback()
                 message_type = "error_db"
 
     return render_template("index.html", products=products, message_type=message_type, name=name, flower=flower)
@@ -84,27 +78,19 @@ def admin():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    if not os.path.exists(EXCEL_FILE):
-        return "Файл с заказами еще не создан. Сначала оформите первый заказ на сайте."
+    orders = Order.query.order_by(Order.id.desc()).all()
+    
+    orders_list = []
+    for o in orders:
+        orders_list.append({
+            'id': o.id,
+            'date': o.date,
+            'name': o.name,
+            'phone': o.phone,
+            'flower': o.flower
+        })
 
-    try:
-        wb = openpyxl.load_workbook(EXCEL_FILE)
-        ws = wb.active
-        orders = []
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            if row[0] is not None:
-                orders.append({
-                    'id': row[0],
-                    'date': row[1],
-                    'name': row[2],
-                    'phone': row[3],
-                    'flower': row[4]
-                })
-
-        return render_template("admin.html", orders=orders)
-    except Exception as e:
-        return f"Ошибка при чтении файла: {e}"
+    return render_template("admin.html", orders=orders_list)
 
 if __name__ == "__main__":
     app.run(debug=True)
