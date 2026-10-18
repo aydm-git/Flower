@@ -33,8 +33,18 @@
   <div class="container">
     <h2>Оформить заказ</h2>
 
-    {% if message %}
-      <div class="message">{{ message }}</div>
+    {% if message_type == "success" %}
+      <div class="message" style="color: green;">
+        Спасибо, {{ name }}! Заявка на «{{ flower }}» принята.
+      </div>
+    {% elif message_type == "error_empty" %}
+      <div class="message" style="color: red;">
+        Заполните имя и телефон
+      </div>
+    {% elif message_type == "error_db" %}
+      <div class="message" style="color: red;">
+        Произошла ошибка. Попробуйте позже.
+      </div>
     {% endif %}
 
     <form method="post" class="order-form">

@@ -43,21 +43,24 @@ init_excel()
 
 @app.route("/", methods=["GET", "POST"])
 def home():
-    message = ""
+    message_type = ""
+    name = ""
+    flower = ""
+
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         phone = request.form.get("phone", "").strip()
         flower = request.form.get("flower", "").strip()
 
         if not name or not phone:
-            message = "Заполните имя и телефон"
+            message_type = "error_empty"
         else:
             if save_to_excel(name, phone, flower):
-                message = f"Спасибо, {name}! Заявка на «{flower}» принята."
+                message_type = "success"
             else:
-                message = "Произошла ошибка. Попробуйте позже."
+                message_type = "error_db"
 
-    return render_template("index.html", products=products, message=message)
+    return render_template("index.html", products=products, message_type=message_type, name=name, flower=flower)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
