@@ -1,5 +1,5 @@
 orders.xlsx
-flower.db
+instance/
 venv/
 __pycache__/
 *.pyc
