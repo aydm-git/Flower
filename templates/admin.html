@@ -1,12 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Админ-панель — Мой сайт{% endblock %}
+{% block title %}Админ-панель{% endblock %}
 
 {% block content %}
 <section class="section" style="padding: 40px 0;">
   <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
-    <h1 style="text-align: center; margin-bottom: 20px;">Панель администратора</h1>
     
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h1 style="margin: 0;">Панель администратора</h1>
+      <a href="{{ url_for('logout') }}" style="color: #666; text-decoration: none; font-weight: bold;">Выйти</a>
+    </div>
+
     {% if orders %}
       <div style="overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
