@@ -3,6 +3,62 @@
 {% block title %}Главная — Мой сайт{% endblock %}
 
 {% block content %}
-    <h1>Привет! Это мой первый сайт на Flask</h1>
-    <p>Здесь я учусь делать сайты на Python.</p>
+<section class="hero">
+  <div class="container">
+    <h1>Доставка цветов в вашем городе</h1>
+    <p>Свежие букеты с доставкой за 2 часа</p>
+    <a href="#catalog" class="btn">Выбрать букет</a>
+  </div>
+</section>
+
+<section class="section" id="catalog">
+  <div class="container">
+    <h2>Популярные букеты</h2>
+    <div class="grid">
+      {% for p in products %}
+        <div class="card">
+          <img src="{{ p.img }}" alt="{{ p.name }}">
+          <div class="card-body">
+            <h3>{{ p.name }}</h3>
+            <div class="price">{{ p.price }} ₽</div>
+            <a href="#order" class="btn">В корзину</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section order" id="order">
+  <div class="container">
+    <h2>Оформить заказ</h2>
+
+    {% if message %}
+      <div class="message">{{ message }}</div>
+    {% endif %}
+
+    <form method="post" class="order-form">
+      <label>
+        Ваше имя
+        <input type="text" name="name" required>
+      </label>
+
+      <label>
+        Телефон
+        <input type="tel" name="phone" required>
+      </label>
+
+      <label>
+        Букет
+        <select name="flower" id="flower">
+          {% for p in products %}
+            <option value="{{ p.name }}">{{ p.name }} — {{ p.price }} ₽</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <button type="submit" class="btn">Отправить заявку</button>
+    </form>
+  </div>
+</section>
 {% endblock %}

@@ -2,21 +2,31 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Мой сайт{% endblock %}</title>
-    <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-        nav a { margin-right: 15px; text-decoration: none; color: #0066cc; }
-        nav a:hover { text-decoration: underline; }
-        footer { margin-top: 40px; color: #888; font-size: 0.9em; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}FlowerShop{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+
+<header>
+  <div class="container header-inner">
+    <div class="logo">FlowerShop</div>
     <nav>
-        <a href="/">Главная</a>
-        <a href="/about">О сайте</a>
+      <a href="/">Каталог</a>
+      <a href="#order">Заказать</a>
+      <a href="#contacts">Контакты</a>
     </nav>
-    <hr>
-    {% block content %}{% endblock %}
-    <footer>© 2026 Мой первый сайт на Flask</footer>
+    <div class="phone">+7 (952) 752-18-52</div>
+  </div>
+</header>
+
+{% block content %}{% endblock %}
+
+<footer id="contacts">
+  <div class="container">
+    <p>© 2026 FlowerShop · <a href="tel:+79991234567">+7 (999) 123-45-67</a></p>
+  </div>
+</footer>
+
 </body>
 </html>
