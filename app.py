@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from werkzeug.security import check_password_hash
+import re
 
 app = Flask(__name__)
 app.secret_key = 'sumb123'
@@ -42,6 +43,8 @@ def home():
 
         if not name or not phone:
             message_type = "error_empty"
+        elif not re.match(r"^\+?[0-9\s\-\(\)]{10,20}$", phone):
+            message_type = "error_phone"
         else:
             try:
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

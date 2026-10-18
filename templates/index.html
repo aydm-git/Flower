@@ -59,6 +59,10 @@
       <div class="message error">
         Заполните имя и телефон
       </div>
+        {% elif message_type == "error_phone" %}
+      <div class="message error">
+        Введите корректный номер телефона (только цифры, можно +, пробелы и скобки)
+      </div>
     {% elif message_type == "error_db" %}
       <div class="message error">
         Произошла ошибка. Попробуйте позже.
@@ -71,9 +75,11 @@
         <input type="text" name="name" required>
       </label>
 
-      <label>
+            <label>
         Телефон
-        <input type="tel" name="phone" required>
+        <input type="tel" name="phone" required 
+               pattern="^\+?[0-9\s\-\(\)]{10,20}$" 
+               title="Введите номер телефона (только цифры, можно +, пробелы и скобки)">
       </label>
 
       <label>
