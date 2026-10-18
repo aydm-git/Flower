@@ -1,16 +1,17 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, session, redirect, url_for, flash
 import openpyxl
 import os
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = 'sumb123'
 
 EXCEL_FILE = "orders.xlsx"
 
 products = [
     {'id': 1, 'name': 'Букет роз', 'price': 2500, 'img': '/static/images/roses.jpeg'},
     {'id': 2, 'name': 'Тюльпаны', 'price': 1800, 'img': '/static/images/tulps.jpg'},
-    {'id': 3, 'name': 'Микс-букет', 'price': 3200, 'img': '/static/images/mix.jpeg'}, 
+    {'id': 3, 'name': 'Микс-букет', 'price': 3200, 'img': '/static/images/mix.jpeg'},
     {'id': 4, 'name': 'Цветы в коробке', 'price': 4000, 'img': '/static/images/box.jpg'},
 ]
 
@@ -26,7 +27,7 @@ def save_to_excel(name, phone, flower):
     try:
         wb = openpyxl.load_workbook(EXCEL_FILE)
         ws = wb.active
-        next_id = ws.max_row 
+        next_id = ws.max_row
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws.append([next_id, now, name, phone, flower])
         wb.save(EXCEL_FILE)
@@ -55,18 +56,36 @@ def home():
 
     return render_template("index.html", products=products, message=message)
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+        if username == "aydm123" and password == "sumb":
+            session["logged_in"] = True
+            return redirect(url_for("admin"))
+        else:
+            flash("Неверный логин или пароль", "error")
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("home"))
+
 @app.route("/admin")
 def admin():
-    if request.args.get("key") != "admin123":
-        return "Доступ запрещен. Используйте секретный ключ.", 403
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
     if not os.path.exists(EXCEL_FILE):
         return "Файл с заказами еще не создан. Сначала оформите первый заказ на сайте."
+
     try:
         wb = openpyxl.load_workbook(EXCEL_FILE)
         ws = wb.active
         orders = []
-        
+
         for row in ws.iter_rows(min_row=2, values_only=True):
             if row[0] is not None:
                 orders.append({
@@ -76,9 +95,10 @@ def admin():
                     'phone': row[3],
                     'flower': row[4]
                 })
-        
+
         return render_template("admin.html", orders=orders)
     except Exception as e:
         return f"Ошибка при чтении файла: {e}"
+
 if __name__ == "__main__":
     app.run(debug=True)
