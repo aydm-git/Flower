@@ -1,0 +1,4 @@
+orders.xlsx
+venv/
+__pycache__/
+*.pyc
