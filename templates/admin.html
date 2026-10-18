@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Админ-панель — Мой сайт{% endblock %}
+
+{% block content %}
+<section class="section" style="padding: 40px 0;">
+  <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
+    <h1 style="text-align: center; margin-bottom: 20px;">Панель администратора</h1>
+    
+    {% if orders %}
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+          <thead style="background-color: #ff3385; color: white;">
+            <tr>
+              <th style="padding: 15px; border: 1px solid #eee;">ID</th>
+              <th style="padding: 15px; border: 1px solid #eee;">Дата</th>
+              <th style="padding: 15px; border: 1px solid #eee;">Имя</th>
+              <th style="padding: 15px; border: 1px solid #eee;">Телефон</th>
+              <th style="padding: 15px; border: 1px solid #eee;">Букет</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for order in orders %}
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.id }}</td>
+                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.date }}</td>
+                <td style="padding: 12px 15px; border: 1px solid #eee;"><strong>{{ order.name }}</strong></td>
+                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.phone }}</td>
+                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.flower }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="text-align: center; font-size: 1.2em; color: #666;">Заказов пока нет.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
