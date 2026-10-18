@@ -3,6 +3,8 @@
 {% block title %}Цветочки{% endblock %}
 
 {% block content %}
+<div id="toast-container"></div>
+
 <section class="hero">
   <div class="container">
     <h1>Доставка цветов в вашем городе</h1>
@@ -21,7 +23,13 @@
           <div class="card-body">
             <h3>{{ p.name }}</h3>
             <div class="price">{{ p.price }} ₽</div>
-            <a href="#order" class="btn">В корзину</a>
+            <button class="btn add-to-cart" 
+                    data-id="{{ p.id }}" 
+                    data-name="{{ p.name }}" 
+                    data-price="{{ p.price }}"
+                    data-img="{{ p.img }}">
+              В корзину
+            </button>
           </div>
         </div>
       {% endfor %}
@@ -33,21 +41,31 @@
   <div class="container">
     <h2>Оформить заказ</h2>
 
+    <div id="cart-summary" class="cart-summary-hidden">
+      <h3>Ваша корзина</h3>
+      <div id="cart-list"></div>
+      <div class="cart-total-row">
+        <strong>Итого:</strong>
+        <span id="cart-total">0</span> ₽
+      </div>
+      <button type="button" class="btn btn-danger" onclick="clearCart()">Очистить корзину</button>
+    </div>
+
     {% if message_type == "success" %}
-      <div class="message" style="color: green;">
+      <div class="message success">
         Спасибо, {{ name }}! Заявка на «{{ flower }}» принята.
       </div>
     {% elif message_type == "error_empty" %}
-      <div class="message" style="color: red;">
+      <div class="message error">
         Заполните имя и телефон
       </div>
     {% elif message_type == "error_db" %}
-      <div class="message" style="color: red;">
+      <div class="message error">
         Произошла ошибка. Попробуйте позже.
       </div>
     {% endif %}
 
-    <form method="post" class="order-form">
+    <form method="post" class="order-form" id="order-form">
       <label>
         Ваше имя
         <input type="text" name="name" required>
@@ -60,15 +78,13 @@
 
       <label>
         Букет
-        <select name="flower" id="flower">
-          {% for p in products %}
-            <option value="{{ p.name }}">{{ p.name }} — {{ p.price }} ₽</option>
-          {% endfor %}
-        </select>
+        <input type="text" name="flower" id="flower-input" readonly required style="background: #eee; color: #555;">
       </label>
 
       <button type="submit" class="btn">Отправить заявку</button>
     </form>
   </div>
 </section>
+
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 {% endblock %}
