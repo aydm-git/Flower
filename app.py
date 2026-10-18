@@ -15,7 +15,6 @@ products = [
 ]
 
 def init_excel():
-    """Создает Excel-файл с заголовками, если его еще нет"""
     if not os.path.exists(EXCEL_FILE):
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -24,11 +23,10 @@ def init_excel():
         wb.save(EXCEL_FILE)
 
 def save_to_excel(name, phone, flower):
-    """Дописывает заказ в конец Excel-файла"""
     try:
         wb = openpyxl.load_workbook(EXCEL_FILE)
         ws = wb.active
-        next_id = ws.max_row  # Номер строки = ID заказа
+        next_id = ws.max_row 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws.append([next_id, now, name, phone, flower])
         wb.save(EXCEL_FILE)
