@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Чечектер — свежие букеты с доставкой за 2 часа">
     <title>{% block title %}Чечектер{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -10,13 +11,13 @@
 
 <header>
   <div class="container header-inner">
-    <div class="logo">Чечектер</div>
+    <a href="{{ url_for('home') }}" class="logo">Чечектер</a>
     <nav>
-      <a href="/">Каталог</a>
-      <a href="#order">Заказать</a>
+      <a href="{{ url_for('home') }}#catalog">Каталог</a>
+      <a href="{{ url_for('home') }}#order">Заказать</a>
       <a href="#contacts">Контакты</a>
     </nav>
-    <div class="phone">+7 (999) 111-22-33</div>
+    <a href="tel:+79991112233" class="phone">+7 (999) 111-22-33</a>
   </div>
 </header>
 
@@ -24,7 +25,7 @@
 
 <footer id="contacts">
   <div class="container">
-    <p>© 2026 Чечектер · <a>chechekter@gmail.com</a></p>
+    <p>© 2026 Чечектер · <a href="mailto:chechekter@gmail.com">chechekter@gmail.com</a></p>
   </div>
 </footer>
 
