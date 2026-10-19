@@ -1,5 +1,9 @@
-orders.xlsx
+.env
 instance/
-venv/
+*.db
+
+# Python
 __pycache__/
 *.pyc
+venv/
+.venv/

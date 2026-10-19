@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Цветочки{% endblock %}
+{% block title %}Чечектер — доставка цветов{% endblock %}
 
 {% block content %}
 <div id="toast-container"></div>
@@ -19,15 +19,15 @@
     <div class="grid">
       {% for p in products %}
         <div class="card">
-          <img src="{{ p.img }}" alt="{{ p.name }}">
+          <img src="{{ url_for('static', filename=p.img) }}" alt="{{ p.name }}" loading="lazy">
           <div class="card-body">
             <h3>{{ p.name }}</h3>
             <div class="price">{{ p.price }} ₽</div>
-            <button class="btn add-to-cart" 
-                    data-id="{{ p.id }}" 
-                    data-name="{{ p.name }}" 
+            <button type="button" class="btn add-to-cart"
+                    data-id="{{ p.id }}"
+                    data-name="{{ p.name }}"
                     data-price="{{ p.price }}"
-                    data-img="{{ p.img }}">
+                    data-img="{{ url_for('static', filename=p.img) }}">
               В корзину
             </button>
           </div>
@@ -46,48 +46,55 @@
       <div id="cart-list"></div>
       <div class="cart-total-row">
         <strong>Итого:</strong>
-        <span id="cart-total">0</span> ₽
+        <span><span id="cart-total">0</span> ₽</span>
       </div>
-      <button type="button" class="btn btn-danger" onclick="clearCart()">Очистить корзину</button>
+      <button type="button" class="btn btn-danger" id="clear-cart-btn">Очистить корзину</button>
     </div>
 
-    {% if message_type == "success" %}
-      <div class="message success">
-        Спасибо, {{ name }}! Заявка на «{{ flower }}» принята.
-      </div>
-    {% elif message_type == "error_empty" %}
-      <div class="message error">
-        Заполните имя и телефон
-      </div>
-        {% elif message_type == "error_phone" %}
-      <div class="message error">
-        Введите корректный номер телефона (только цифры, можно +, пробелы и скобки)
-      </div>
+    {# Сообщения после успешного заказа (приходят через flash + redirect) #}
+    {% with success = get_flashed_messages(category_filter=["order_success"]) %}
+      {% for msg in success %}
+        <div class="message success" data-clear-cart>{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if message_type == "error_empty" %}
+      <div class="message error">Заполните имя и телефон</div>
+    {% elif message_type == "error_name" %}
+      <div class="message error">Имя слишком длинное (максимум 100 символов)</div>
+    {% elif message_type == "error_phone" %}
+      <div class="message error">Введите корректный номер телефона (10–15 цифр, можно +, пробелы, дефисы и скобки)</div>
+    {% elif message_type == "error_cart" %}
+      <div class="message error">Корзина пуста — добавьте букет из каталога</div>
     {% elif message_type == "error_db" %}
-      <div class="message error">
-        Произошла ошибка. Попробуйте позже.
-      </div>
+      <div class="message error">Произошла ошибка. Попробуйте позже.</div>
     {% endif %}
 
-    <form method="post" class="order-form" id="order-form">
+    <form method="post" action="{{ url_for('home') }}#order" class="order-form" id="order-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="cart" id="cart-field" value="[]">
+
       <label>
         Ваше имя
-        <input type="text" name="name" required>
+        <input type="text" name="name" required maxlength="100" autocomplete="name"
+               value="{{ name }}">
       </label>
 
-            <label>
+      <label>
         Телефон
-        <input type="tel" name="phone" required 
-               pattern="^\+?[0-9\s\-\(\)]{10,20}$" 
-               title="Введите номер телефона (только цифры, можно +, пробелы и скобки)">
+        <input type="tel" name="phone" required inputmode="tel" autocomplete="tel"
+               pattern="^\+?[0-9\s\-\(\)]{10,20}$"
+               title="Введите номер телефона (только цифры, можно +, пробелы, дефисы и скобки)"
+               value="{{ phone }}">
       </label>
 
       <label>
         Букет
-        <input type="text" name="flower" id="flower-input" readonly required style="background: #eee; color: #555;">
+        <input type="text" id="flower-input" readonly
+               placeholder="Корзина пуста — выберите букет в каталоге">
       </label>
 
-      <button type="submit" class="btn">Отправить заявку</button>
+      <button type="submit" class="btn" id="submit-btn">Отправить заявку</button>
     </form>
   </div>
 </section>
