@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Админ-панель — товары{% endblock %}
+
+{% block content %}
+<section class="section admin-section">
+  <div class="container admin-container">
+
+    {% include "_admin_nav.html" %}
+
+    <div class="toolbar">
+      <a href="{{ url_for('admin.product_new') }}" class="btn btn-small">+ Добавить товар</a>
+    </div>
+
+    {% if products %}
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Фото</th>
+              <th>Название</th>
+              <th>Цена</th>
+              <th>Остаток</th>
+              <th>В каталоге</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+              <tr>
+                <td><img class="thumb" src="{{ url_for('static', filename=p.img) }}" alt="{{ p.name }}"></td>
+                <td><strong>{{ p.name }}</strong></td>
+                <td class="nowrap">{{ p.price }} ₽</td>
+                <td class="nowrap">
+                  <div class="stock-ctrl">
+                    <form method="post" action="{{ url_for('admin.product_stock', pid=p.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="delta" value="-1">
+                      <button type="submit" class="round-btn" aria-label="Убавить">−</button>
+                    </form>
+                    <span class="stock-num {% if p.stock < 1 %}stock-zero{% endif %}">{{ p.stock }}</span>
+                    <form method="post" action="{{ url_for('admin.product_stock', pid=p.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="delta" value="1">
+                      <button type="submit" class="round-btn" aria-label="Добавить">+</button>
+                    </form>
+                  </div>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('admin.product_toggle', pid=p.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="pill {{ 'pill-on' if p.is_active else 'pill-off' }}">
+                      {{ 'Показан' if p.is_active else 'Скрыт' }}
+                    </button>
+                  </form>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <a href="{{ url_for('admin.product_edit', pid=p.id) }}" class="btn-icon">Изменить</a>
+                    <form method="post" action="{{ url_for('admin.product_delete', pid=p.id) }}"
+                          onsubmit="return confirm('Удалить товар «{{ p.name }}»? Это нельзя отменить.')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn-icon btn-icon-danger">Удалить</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-note">Товаров пока нет. Нажмите «Добавить товар».</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

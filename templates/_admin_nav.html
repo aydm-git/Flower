@@ -1,0 +1,14 @@
+<div class="admin-bar">
+  <h1>Панель администратора</h1>
+  <div class="admin-tabs">
+    <a href="{{ url_for('admin.order_list') }}" class="{{ 'active' if active == 'orders' else '' }}">Заказы</a>
+    <a href="{{ url_for('admin.product_list') }}" class="{{ 'active' if active == 'products' else '' }}">Товары</a>
+    <a href="{{ url_for('auth.logout') }}" class="admin-logout">Выйти</a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="admin-flash {{ 'ok' if category == 'ok' else 'err' }}">{{ message }}</div>
+  {% endfor %}
+{% endwith %}

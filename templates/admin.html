@@ -1,39 +1,87 @@
 {% extends "base.html" %}
 
-{% block title %}Админ-панель{% endblock %}
+{% block title %}Админ-панель — заказы{% endblock %}
 
 {% block content %}
-<section class="section" style="padding: 40px 0;">
-  <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
+<section class="section admin-section">
+  <div class="container admin-container">
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h1 style="margin: 0;">Панель администратора</h1>
-      <a href="{{ url_for('logout') }}" style="color: #666; text-decoration: none; font-weight: bold;">Выйти</a>
+    {% include "_admin_nav.html" %}
+
+    <div class="stat-row">
+      <div class="stat"><span class="stat-num">{{ stats.count }}</span><span class="stat-label">всего заказов</span></div>
+      <div class="stat"><span class="stat-num">{{ stats.new }}</span><span class="stat-label">новых</span></div>
+      <div class="stat"><span class="stat-num">{{ stats.today }}</span><span class="stat-label">к выдаче сегодня</span></div>
+      <div class="stat"><span class="stat-num">{{ stats.revenue }} ₽</span><span class="stat-label">выручка (без отменённых)</span></div>
     </div>
 
+    <form method="get" class="filter-row">
+      <input type="search" name="q" value="{{ f_q }}" placeholder="Поиск: имя, телефон, адрес, букет">
+      <select name="status">
+        <option value="">Все статусы</option>
+        {% for key, label in statuses.items() %}
+          <option value="{{ key }}" {% if f_status == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-small">Найти</button>
+      {% if f_q or f_status %}<a href="{{ url_for('admin.order_list') }}" class="link-reset">Сбросить</a>{% endif %}
+    </form>
+
     {% if orders %}
-      <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-          <thead style="background-color: #e91e8c; color: white;">
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead>
             <tr>
-              <th style="padding: 15px; border: 1px solid #eee;">ID</th>
-              <th style="padding: 15px; border: 1px solid #eee;">Дата</th>
-              <th style="padding: 15px; border: 1px solid #eee;">Имя</th>
-              <th style="padding: 15px; border: 1px solid #eee;">Телефон</th>
-              <th style="padding: 15px; border: 1px solid #eee;">Букет</th>
-              <th style="padding: 15px; border: 1px solid #eee;">Сумма</th>
+              <th>№</th>
+              <th>Дата</th>
+              <th>Имя</th>
+              <th>Телефон</th>
+              <th>Букет</th>
+              <th>Получение</th>
+              <th>Сумма</th>
+              <th>Статус</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {% for order in orders %}
-              <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.id }}</td>
-                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.date }}</td>
-                <td style="padding: 12px 15px; border: 1px solid #eee;"><strong>{{ order.name }}</strong></td>
-                <td style="padding: 12px 15px; border: 1px solid #eee;"><a href="tel:{{ order.phone }}">{{ order.phone }}</a></td>
-                <td style="padding: 12px 15px; border: 1px solid #eee;">{{ order.flower }}</td>
-                <td style="padding: 12px 15px; border: 1px solid #eee; white-space: nowrap;">
-                  {% if order.total %}{{ order.total }} ₽{% else %}—{% endif %}
+              <tr>
+                <td>{{ order.id }}</td>
+                <td class="nowrap">{{ order.date }}</td>
+                <td><strong>{{ order.name }}</strong></td>
+                <td class="nowrap"><a href="tel:{{ order.phone }}">{{ order.phone }}</a></td>
+                <td>{{ order.flower }}</td>
+                <td class="deliv">
+                  {% if order.delivery_date %}
+                    <div class="deliv-when">{{ order.delivery_date_ru }} · {{ order.delivery_time }}</div>
+                    <div class="deliv-where">{% if order.is_pickup %}Самовывоз{% else %}{{ order.address }}{% endif %}</div>
+                    {% if order.card_text %}<div class="deliv-note"><b>Открытка:</b> {{ order.card_text }}</div>{% endif %}
+                    {% if order.comment %}<div class="deliv-note"><b>Комментарий:</b> {{ order.comment }}</div>{% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="nowrap">{% if order.total %}{{ order.total }} ₽{% else %}—{% endif %}</td>
+                <td>
+                  <form method="post" action="{{ url_for('admin.order_status', order_id=order.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="f_status" value="{{ f_status }}">
+                    <input type="hidden" name="f_q" value="{{ f_q }}">
+                    <select name="status" class="status-select status-{{ order.status }}" onchange="this.form.submit()">
+                      {% for key, label in statuses.items() %}
+                        <option value="{{ key }}" {% if order.status == key %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </form>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('admin.order_delete', order_id=order.id) }}"
+                        onsubmit="return confirm('Удалить заказ №{{ order.id }}? Это нельзя отменить.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="f_status" value="{{ f_status }}">
+                    <input type="hidden" name="f_q" value="{{ f_q }}">
+                    <button type="submit" class="btn-icon btn-icon-danger" title="Удалить заказ">Удалить</button>
+                  </form>
                 </td>
               </tr>
             {% endfor %}
@@ -41,7 +89,7 @@
         </table>
       </div>
     {% else %}
-      <p style="text-align: center; font-size: 1.2em; color: #666;">Заказов пока нет.</p>
+      <p class="empty-note">{% if f_q or f_status %}По вашему запросу заказов нет.{% else %}Заказов пока нет.{% endif %}</p>
     {% endif %}
   </div>
 </section>

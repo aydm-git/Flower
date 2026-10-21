@@ -4,7 +4,6 @@
   const STORAGE_KEY = 'flowerCart';
   const MAX_QTY = 99;
 
-  // Элементы страницы
   const summary = document.getElementById('cart-summary');
   const cartList = document.getElementById('cart-list');
   const cartTotal = document.getElementById('cart-total');
@@ -15,7 +14,6 @@
   const clearBtn = document.getElementById('clear-cart-btn');
   const toastContainer = document.getElementById('toast-container');
 
-  // Каталог берём из кнопок на странице — это актуальные названия и цены
   const catalog = {};
   document.querySelectorAll('.add-to-cart').forEach((btn) => {
     catalog[btn.dataset.id] = {
@@ -23,10 +21,10 @@
       name: btn.dataset.name,
       price: parseInt(btn.dataset.price, 10),
       img: btn.dataset.img,
+      stock: parseInt(btn.dataset.stock, 10) || 0,
     };
   });
 
-  // ---------- Хранилище (с запасным вариантом, если localStorage недоступен) ----------
   let memoryFallback = [];
 
   function loadCart() {
@@ -35,7 +33,6 @@
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (Array.isArray(parsed)) raw = parsed;
     } catch (e) {
-      /* повреждённые данные или нет доступа — работаем с пустой/запасной корзиной */
     }
 
     const cart = [];
@@ -43,7 +40,9 @@
       const product = item && catalog[String(item.id)];
       const qty = parseInt(item && item.quantity, 10);
       if (!product || !(qty > 0)) return;
-      cart.push({ ...product, quantity: Math.min(qty, MAX_QTY) });
+      const limit = Math.min(MAX_QTY, product.stock);
+      if (limit < 1) return;
+      cart.push({ ...product, quantity: Math.min(qty, limit) });
     });
     return cart;
   }
@@ -54,11 +53,9 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(compact));
     } catch (e) {
-      /* приватный режим и т.п. — остаёмся на memoryFallback */
     }
   }
 
-  // ---------- Уведомления ----------
   function showToast(message) {
     if (!toastContainer) return;
     const toast = document.createElement('div');
@@ -74,7 +71,6 @@
     setTimeout(() => toast.remove(), 3000);
   }
 
-  // ---------- Действия с корзиной ----------
   function addToCart(id) {
     const product = catalog[id];
     if (!product) return;
@@ -82,7 +78,11 @@
     const cart = loadCart();
     const existing = cart.find((i) => i.id === id);
     if (existing) {
-      existing.quantity = Math.min(existing.quantity + 1, MAX_QTY);
+      if (existing.quantity >= Math.min(MAX_QTY, product.stock)) {
+        showToast(`«${product.name}»: больше нет в наличии`);
+        return;
+      }
+      existing.quantity += 1;
     } else {
       cart.push({ ...product, quantity: 1 });
     }
@@ -96,7 +96,7 @@
     const item = cart.find((i) => i.id === id);
     if (!item) return;
 
-    item.quantity = Math.min(item.quantity + delta, MAX_QTY);
+    item.quantity = Math.min(item.quantity + delta, Math.min(MAX_QTY, item.stock));
     if (item.quantity <= 0) {
       cart = cart.filter((i) => i.id !== id);
     }
@@ -108,11 +108,10 @@
     saveCart([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (e) { /* ignore */ }
+    } catch (e) {  }
     renderCart();
   }
 
-  // ---------- Отрисовка ----------
   function formatMoney(n) {
     return n.toLocaleString('ru-RU');
   }
@@ -139,7 +138,6 @@
 
     const cart = loadCart();
 
-    // Скрытое поле, которое уйдёт на сервер: только id и количество
     if (cartField) {
       cartField.value = JSON.stringify(
         cart.map((i) => ({ id: i.id, quantity: i.quantity }))
@@ -189,7 +187,6 @@
     if (flowerInput) flowerInput.value = names.join(', ');
   }
 
-  // ---------- Обработчики событий ----------
   document.querySelectorAll('.add-to-cart').forEach((btn) => {
     btn.addEventListener('click', () => addToCart(btn.dataset.id));
   });
@@ -222,15 +219,13 @@
     });
   }
 
-  // После успешного заказа сервер выводит сообщение с атрибутом data-clear-cart
   if (document.querySelector('[data-clear-cart]')) {
     saveCart([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (e) { /* ignore */ }
+    } catch (e) {  }
   }
 
-  // Кнопка «Назад» в браузере: вернуть кнопке отправки рабочее состояние
   window.addEventListener('pageshow', () => {
     if (submitBtn) {
       submitBtn.disabled = false;

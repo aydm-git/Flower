@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Изменить товар' if product else 'Новый товар' }}{% endblock %}
+
+{% block content %}
+<section class="section admin-section">
+  <div class="container admin-container">
+
+    {% include "_admin_nav.html" %}
+
+    <h2 class="form-title">{{ 'Изменить товар' if product else 'Новый товар' }}</h2>
+
+    {% for err in errors %}
+      <div class="message error">{{ err }}</div>
+    {% endfor %}
+
+    <form method="post" enctype="multipart/form-data" class="order-form product-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>
+        Название
+        <input type="text" name="name" required maxlength="100" value="{{ form.get('name', '') }}">
+      </label>
+
+      <label>
+        Цена, ₽
+        <input type="number" name="price" required min="1" max="1000000" step="1" value="{{ form.get('price', '') }}">
+      </label>
+
+      <label>
+        Количество на складе
+        <input type="number" name="stock" required min="0" max="10000" step="1" value="{{ form.get('stock', '') }}">
+      </label>
+
+      <label>
+        Фото {% if product %}(оставьте пустым, чтобы не менять){% else %}(JPG, PNG или WEBP, до 5 МБ){% endif %}
+        {% if product %}
+          <img class="thumb thumb-big" src="{{ url_for('static', filename=product.img) }}" alt="{{ product.name }}">
+        {% endif %}
+        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" {% if not product %}required{% endif %}>
+      </label>
+
+      <label class="check-row">
+        <input type="checkbox" name="is_active" value="1" {% if form.get('is_active') %}checked{% endif %}>
+        Показывать в каталоге
+      </label>
+
+      <div class="form-actions">
+        <button type="submit" class="btn">Сохранить</button>
+        <a href="{{ url_for('admin.product_list') }}" class="link-reset">Отмена</a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
