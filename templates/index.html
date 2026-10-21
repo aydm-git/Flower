@@ -16,24 +16,35 @@
 <section class="section" id="catalog">
   <div class="container">
     <h2>Популярные букеты</h2>
+
+    {% if products %}
     <div class="grid">
       {% for p in products %}
-        <div class="card">
+        <div class="card{% if p.stock < 1 %} card-soldout{% endif %}">
           <img src="{{ url_for('static', filename=p.img) }}" alt="{{ p.name }}" loading="lazy">
           <div class="card-body">
             <h3>{{ p.name }}</h3>
             <div class="price">{{ p.price }} ₽</div>
-            <button type="button" class="btn add-to-cart"
-                    data-id="{{ p.id }}"
-                    data-name="{{ p.name }}"
-                    data-price="{{ p.price }}"
-                    data-img="{{ url_for('static', filename=p.img) }}">
-              В корзину
-            </button>
+            {% if p.stock < 1 %}
+              <button type="button" class="btn" disabled>Нет в наличии</button>
+            {% else %}
+              {% if p.stock <= 5 %}<div class="stock-note">Осталось {{ p.stock }} шт.</div>{% endif %}
+              <button type="button" class="btn add-to-cart"
+                      data-id="{{ p.id }}"
+                      data-name="{{ p.name }}"
+                      data-price="{{ p.price }}"
+                      data-stock="{{ p.stock }}"
+                      data-img="{{ url_for('static', filename=p.img) }}">
+                В корзину
+              </button>
+            {% endif %}
           </div>
         </div>
       {% endfor %}
     </div>
+    {% else %}
+      <p class="empty-note">Каталог скоро пополнится. Загляните позже 🌸</p>
+    {% endif %}
   </div>
 </section>
 
@@ -51,33 +62,28 @@
       <button type="button" class="btn btn-danger" id="clear-cart-btn">Очистить корзину</button>
     </div>
 
-    {# Сообщения после успешного заказа (приходят через flash + redirect) #}
-    {% with success = get_flashed_messages(category_filter=["order_success"]) %}
-      {% for msg in success %}
-        <div class="message success" data-clear-cart>{{ msg }}</div>
+    {% with flashes = get_flashed_messages(with_categories=true) %}
+      {% for category, msg in flashes %}
+        {% if category == "order_success" %}
+          <div class="message success" data-clear-cart>{{ msg }}</div>
+        {% elif category == "error" %}
+          <div class="message error">{{ msg }}</div>
+        {% endif %}
       {% endfor %}
     {% endwith %}
 
-    {% if message_type == "error_empty" %}
-      <div class="message error">Заполните имя и телефон</div>
-    {% elif message_type == "error_name" %}
-      <div class="message error">Имя слишком длинное (максимум 100 символов)</div>
-    {% elif message_type == "error_phone" %}
-      <div class="message error">Введите корректный номер телефона (10–15 цифр, можно +, пробелы, дефисы и скобки)</div>
-    {% elif message_type == "error_cart" %}
-      <div class="message error">Корзина пуста — добавьте букет из каталога</div>
-    {% elif message_type == "error_db" %}
-      <div class="message error">Произошла ошибка. Попробуйте позже.</div>
+    {% if error %}
+      <div class="message error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('home') }}#order" class="order-form" id="order-form">
+    <form method="post" action="{{ url_for('shop.home') }}#order" class="order-form" id="order-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="cart" id="cart-field" value="[]">
 
       <label>
         Ваше имя
         <input type="text" name="name" required maxlength="100" autocomplete="name"
-               value="{{ name }}">
+               value="{{ form.get('name', '') }}">
       </label>
 
       <label>
@@ -85,7 +91,7 @@
         <input type="tel" name="phone" required inputmode="tel" autocomplete="tel"
                pattern="^\+?[0-9\s\-\(\)]{10,20}$"
                title="Введите номер телефона (только цифры, можно +, пробелы, дефисы и скобки)"
-               value="{{ phone }}">
+               value="{{ form.get('phone', '') }}">
       </label>
 
       <label>
@@ -94,10 +100,98 @@
                placeholder="Корзина пуста — выберите букет в каталоге">
       </label>
 
+      <h3 class="form-section">Получение заказа</h3>
+
+      <label class="check-row">
+        <input type="checkbox" name="is_pickup" id="is-pickup" value="1"
+               {% if form.get('is_pickup') %}checked{% endif %}>
+        Самовывоз (заберу сам)
+      </label>
+
+      <label id="address-wrap">
+        Адрес доставки
+        <input type="text" name="address" id="address-input" required maxlength="255"
+               autocomplete="street-address" placeholder="Улица, дом, квартира"
+               value="{{ form.get('address', '') }}">
+      </label>
+
+      <label>
+        Дата
+        <input type="date" name="delivery_date" id="delivery-date" required
+               min="{{ min_date }}" max="{{ max_date }}"
+               value="{{ form.get('delivery_date') or min_date }}">
+      </label>
+
+      <label>
+        Время
+        <select name="delivery_time" id="delivery-time" required>
+          <option value="">Выберите время</option>
+          {% for s in slots %}
+            <option value="{{ s.label }}"
+                    {% if s.asap %}data-asap="1"{% else %}data-end="{{ s.end }}"{% endif %}
+                    {% if form.get('delivery_time') == s.label %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>
+        Текст для открытки <span class="opt">(необязательно)</span>
+        <input type="text" name="card_text" maxlength="300"
+               placeholder="Например: С днём рождения!"
+               value="{{ form.get('card_text', '') }}">
+      </label>
+
+      <label>
+        Комментарий курьеру <span class="opt">(необязательно)</span>
+        <textarea name="comment" rows="3" maxlength="500"
+                  placeholder="Домофон, этаж, как позвонить">{{ form.get('comment', '') }}</textarea>
+      </label>
+
       <button type="submit" class="btn" id="submit-btn">Отправить заявку</button>
     </form>
   </div>
 </section>
 
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+<script>
+(function () {
+  var pickup = document.getElementById('is-pickup');
+  var addrWrap = document.getElementById('address-wrap');
+  var addr = document.getElementById('address-input');
+  var dateInput = document.getElementById('delivery-date');
+  var timeSelect = document.getElementById('delivery-time');
+  if (!pickup || !addrWrap || !addr || !dateInput || !timeSelect) return;
+
+  function togglePickup() {
+    addrWrap.hidden = pickup.checked;
+    addr.required = !pickup.checked;
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function updateSlots() {
+    var isToday = dateInput.value === todayStr();
+    var now = new Date();
+    var hour = now.getHours() + now.getMinutes() / 60;
+    Array.prototype.forEach.call(timeSelect.options, function (opt) {
+      if (!opt.value) return;
+      var ok = true;
+      if (opt.dataset.asap) ok = isToday;
+      else if (isToday) ok = Number(opt.dataset.end) > hour + 1;
+      opt.disabled = !ok;
+    });
+    var selected = timeSelect.options[timeSelect.selectedIndex];
+    if (selected && selected.disabled) timeSelect.value = '';
+  }
+
+  pickup.addEventListener('change', togglePickup);
+  dateInput.addEventListener('change', updateSlots);
+  togglePickup();
+  updateSlots();
+})();
+</script>
 {% endblock %}
