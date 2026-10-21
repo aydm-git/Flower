@@ -7,6 +7,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import socks
 from datetime import date, datetime, timedelta
 
 from flask import current_app
@@ -237,26 +238,27 @@ def format_order_message(order) -> str:
 
 def send_telegram(token: str, chat_ids: list, text: str, logger) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    proxy_url = os.environ.get("TELEGRAM_PROXY", "").strip()
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+
     for chat_id in chat_ids:
-        payload = urllib.parse.urlencode(
-            {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": "true",
-            }
-        ).encode()
+        payload = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        }
         try:
-            request = urllib.request.Request(url, data=payload)
-            with urllib.request.urlopen(request, timeout=10) as response:
-                response.read()
+            response = requests.post(
+                url, data=payload, proxies=proxies, timeout=15
+            )
+            response.raise_for_status()
         except Exception as e:
             logger.error(
                 "Telegram: не удалось отправить уведомление (%s %s)",
                 type(e).__name__,
-                getattr(e, "code", ""),
+                getattr(e, "response", None) and e.response.status_code,
             )
-
 
 def notify_new_order(order) -> None:
     token = current_app.config.get("TELEGRAM_BOT_TOKEN", "")
