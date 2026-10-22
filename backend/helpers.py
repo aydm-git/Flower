@@ -8,6 +8,7 @@ import time
 import urllib.parse
 import urllib.request
 import socks
+import requests
 from datetime import date, datetime, timedelta
 
 from flask import current_app
