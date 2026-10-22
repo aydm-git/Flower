@@ -591,3 +591,11 @@ footer a:hover { text-decoration: underline; }
   .product-layout { grid-template-columns: 1fr; gap: 20px; }
   .product-info h1 { font-size: 24px; }
 }
+
+.card-more {
+  display: block;
+  margin: -4px 0 10px;
+  font-size: 13px;
+  color: #888;
+}
+.card-more:hover { color: #e91e8c; text-decoration: underline; }
