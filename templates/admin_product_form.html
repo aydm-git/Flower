@@ -33,6 +33,19 @@
       </label>
 
       <label>
+        Состав <span class="opt">(необязательно)</span>
+        <input type="text" name="composition" maxlength="500"
+               placeholder="Например: розы, эвкалипт, гипсофила"
+               value="{{ form.get('composition', '') }}">
+      </label>
+
+      <label>
+        Описание <span class="opt">(необязательно)</span>
+        <textarea name="description" rows="5" maxlength="2000"
+                  placeholder="Размер, упаковка, для какого случая подойдёт">{{ form.get('description', '') }}</textarea>
+      </label>
+
+      <label>
         Фото {% if product %}(оставьте пустым, чтобы не менять){% else %}(JPG, PNG или WEBP, до 5 МБ){% endif %}
         {% if product %}
           <img class="thumb thumb-big" src="{{ url_for('static', filename=product.img) }}" alt="{{ product.name }}">
