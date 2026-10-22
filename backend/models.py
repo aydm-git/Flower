@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError
 
 db = SQLAlchemy()
 
@@ -100,10 +101,14 @@ def add_column_if_missing(model, column_name: str, ddl: str) -> bool:
     columns = {c["name"] for c in inspect(db.engine).get_columns(model.__tablename__)}
     if column_name in columns:
         return False
-    with db.engine.begin() as conn:
-        conn.execute(text(f'ALTER TABLE "{model.__tablename__}" ADD COLUMN {ddl}'))
-    return True
-
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text(f'ALTER TABLE "{model.__tablename__}" ADD COLUMN {ddl}'))
+        return True
+    except OperationalError as e:
+        if "duplicate column name" in str(e).lower():
+            return False  # другой worker уже добавил колонку
+        raise
 
 def ensure_schema() -> None:
     first_products_run = not inspect(db.engine).has_table(Product.__tablename__)
