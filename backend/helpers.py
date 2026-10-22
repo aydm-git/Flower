@@ -136,11 +136,21 @@ def validate_product_form(form):
     except ValueError:
         errors.append(f"Количество — целое число от 0 до {MAX_STOCK}")
 
+    composition = form.get("composition", "").strip()
+    if len(composition) > 500:
+        errors.append("Состав слишком длинный (максимум 500 символов)")
+
+    description = form.get("description", "").strip()
+    if len(description) > 2000:
+        errors.append("Описание слишком длинное (максимум 2000 символов)")
+
     data = {
         "name": name,
         "price": price,
         "stock": stock,
         "is_active": form.get("is_active") == "1",
+        "composition": composition,
+        "description": description,
     }
     return data, errors
 
