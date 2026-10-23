@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} — Чечектер{% endblock %}
+
+{% block content %}
+<div id="toast-container"></div>
+
+<section class="section product-page">
+  <div class="container">
+    <a href="{{ url_for('shop.home', _anchor='catalog') }}" class="back-link">← Все букеты</a>
+
+    <div class="product-layout">
+      <div class="product-photo{% if product.stock < 1 %} card-soldout{% endif %}">
+        <img src="{{ url_for('static', filename=product.img) }}" alt="{{ product.name }}">
+      </div>
+
+      <div class="product-info">
+        <h1>{{ product.name }}</h1>
+        <div class="price price-big">{{ product.price }} ₽</div>
+
+        {% if product.stock < 1 %}
+          <p class="stock-note">Нет в наличии</p>
+        {% elif product.stock <= 5 %}
+          <p class="stock-note">Осталось {{ product.stock }} шт.</p>
+        {% endif %}
+
+        {% if product.composition %}
+          <div class="product-block">
+            <h3 class="product-block-title">Состав</h3>
+            <p>{{ product.composition }}</p>
+          </div>
+        {% endif %}
+
+        {% if product.description %}
+          <div class="product-block">
+            <h3 class="product-block-title">Описание</h3>
+            <p class="product-desc">{{ product.description }}</p>
+          </div>
+        {% endif %}
+
+        <div class="product-actions">
+          {% if product.stock < 1 %}
+            <button type="button" class="btn" disabled>Нет в наличии</button>
+          {% else %}
+            <button type="button" class="btn add-to-cart"
+                    data-id="{{ product.id }}"
+                    data-name="{{ product.name }}"
+                    data-price="{{ product.price }}"
+                    data-stock="{{ product.stock }}"
+                    data-img="{{ url_for('static', filename=product.img) }}">
+              В корзину
+            </button>
+            <a href="{{ url_for('shop.home', _anchor='order') }}" class="btn btn-outline">Оформить заказ</a>
+          {% endif %}
+        </div>
+
+        <p class="product-note">Доставка за 2 часа или самовывоз. Дату и время выберете при оформлении заказа.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if others %}
+<section class="section more-products">
+  <div class="container">
+    <h2>Другие букеты</h2>
+    <div class="grid">
+      {% for p in others %}
+        <div class="card{% if p.stock < 1 %} card-soldout{% endif %}">
+          <a href="{{ url_for('shop.product_page', pid=p.id) }}" class="card-link">
+            <img src="{{ url_for('static', filename=p.img) }}" alt="{{ p.name }}" loading="lazy">
+          </a>
+          <div class="card-body">
+            <h3><a href="{{ url_for('shop.product_page', pid=p.id) }}">{{ p.name }}</a></h3>
+            <div class="price">{{ p.price }} ₽</div>
+            <a href="{{ url_for('shop.product_page', pid=p.id) }}" class="btn">Подробнее</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+{% endblock %}
