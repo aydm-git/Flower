@@ -5,16 +5,15 @@ import re
 import secrets
 import threading
 import time
-import urllib.parse
-import urllib.request
-import socks
 import requests
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from flask import current_app
+from sqlalchemy import update
 
 from config import MAX_PRICE, MAX_QTY, MAX_STOCK
-from models import Order, Product, db
+from models import STATUSES, Order, Product, db
 
 
 PHONE_RE = re.compile(r"^\+?[0-9\s\-\(\)]{10,20}$")
@@ -36,6 +35,12 @@ DELIVERY_SLOTS = [
     "20:00–22:00",
 ]
 MAX_DELIVERY_DAYS = 60
+OPENING_HOUR = 10
+CLOSING_HOUR = 22
+
+
+def shop_now():
+    return datetime.now(ZoneInfo(current_app.config["SHOP_TIMEZONE"]))
 
 
 def slot_options():
@@ -50,7 +55,7 @@ def slot_options():
 
 
 def delivery_date_limits():
-    today = date.today()
+    today = shop_now().date()
     return today.isoformat(), (today + timedelta(days=MAX_DELIVERY_DAYS)).isoformat()
 
 
@@ -60,15 +65,25 @@ def validate_delivery_slot(delivery_date: str, delivery_time: str) -> str:
     except ValueError:
         return "Выберите дату доставки"
 
-    today = date.today()
+    now = shop_now()
+    today = now.date()
     if chosen < today:
         return "Дата не может быть в прошлом"
     if chosen > today + timedelta(days=MAX_DELIVERY_DAYS):
         return f"Заказать можно не дальше чем на {MAX_DELIVERY_DAYS} дней вперёд"
     if delivery_time not in DELIVERY_SLOTS:
         return "Выберите время доставки"
-    if delivery_time == ASAP_SLOT and chosen != today:
-        return "«Как можно скорее» доступно только на сегодня"
+    if delivery_time == ASAP_SLOT:
+        if chosen != today:
+            return "«Как можно скорее» доступно только на сегодня"
+        closes = now.replace(hour=CLOSING_HOUR, minute=0, second=0, microsecond=0)
+        if now.hour < OPENING_HOUR or now + timedelta(hours=2) > closes:
+            return "Доставка за 2 часа доступна с 10:00 до 20:00 по времени магазина"
+    elif chosen == today:
+        end_hour = int(delivery_time.split("–")[1].split(":")[0])
+        end = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+        if end <= now + timedelta(hours=1):
+            return "Этот интервал уже недоступен. Выберите более позднее время"
     return ""
 
 
@@ -155,28 +170,36 @@ def validate_product_form(form):
     return data, errors
 
 
+def bounded_integer(value, maximum):
+    # bool is an int subclass; floats (including inf/NaN) are never quantities.
+    if type(value) is str:
+        if not re.fullmatch(r"[0-9]{1,19}", value):
+            return None
+        value = int(value)
+    if type(value) is not int or not 1 <= value <= maximum:
+        return None
+    return value
+
+
 def parse_cart(raw: str) -> dict:
     if not raw or len(raw) > 5000:
         return {}
     try:
         data = json.loads(raw)
-    except ValueError:
+    except (ValueError, RecursionError):
         return {}
-    if not isinstance(data, list):
+    if not isinstance(data, list) or len(data) > 50:
         return {}
 
     merged = {}
-    for item in data[:50]:
+    for item in data:
         if not isinstance(item, dict):
-            continue
-        try:
-            pid = int(item.get("id"))
-            qty = int(item.get("quantity"))
-        except (TypeError, ValueError):
-            continue
-        if qty < 1:
-            continue
-        merged[pid] = min(merged.get(pid, 0) + qty, MAX_QTY)
+            return {}
+        pid = bounded_integer(item.get("id"), 2**63 - 1)
+        qty = bounded_integer(item.get("quantity"), MAX_QTY)
+        if pid is None or qty is None or merged.get(pid, 0) + qty > MAX_QTY:
+            return {}
+        merged[pid] = merged.get(pid, 0) + qty
     return merged
 
 
@@ -203,18 +226,36 @@ def build_order(cart: dict):
 
 
 def place_order(data: dict, cart: dict):
-    lines, total, error = build_order(cart)
-    if error:
-        return 0, error
-
     try:
-        for product, qty in lines:
-            product.stock -= qty
+        if not cart:
+            raise OrderError("Корзина пуста — добавьте букет из каталога")
+        lines, total, error = build_order(cart)
+        if error:
+            raise OrderError(error)
+        for product, qty in sorted(lines, key=lambda line: line[0].id):
+            result = db.session.execute(
+                update(Product).where(
+                    Product.id == product.id,
+                    Product.is_active.is_(True),
+                    Product.stock >= qty,
+                    Product.price == product.price,
+                ).values(stock=Product.stock - qty),
+                execution_options={"synchronize_session": False},
+            )
+            if result.rowcount != 1:
+                raise OrderError("Остаток или цена товара изменились. Обновите страницу.")
         flower = ", ".join(f"{p.name} ({q} шт)" for p, q in lines)
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        order = Order(date=now, flower=flower, total=total, **data)
+        items = [
+            {"product_id": p.id, "name": p.name, "quantity": q, "price": p.price}
+            for p, q in lines
+        ]
+        now = shop_now().strftime("%Y-%m-%d %H:%M:%S")
+        order = Order(date=now, flower=flower, total=total, items=items, **data)
         db.session.add(order)
         db.session.commit()
+    except OrderError as exc:
+        db.session.rollback()
+        return 0, str(exc)
     except Exception:
         current_app.logger.exception("Не удалось сохранить заказ")
         db.session.rollback()
@@ -222,6 +263,99 @@ def place_order(data: dict, cart: dict):
 
     notify_new_order(order)
     return total, ""
+
+
+class OrderError(ValueError):
+    pass
+
+
+def order_items(order):
+    if order.items is not None:
+        items = order.items
+    else:
+        # Only parse the exact historical format; never guess missing product IDs.
+        for product in Product.query.filter(Product.name.contains(" шт), ")).all():
+            if f"{product.name} (" in order.flower:
+                raise OrderError("Состав старого заказа неоднозначен. Требуется ручная сверка.")
+        matches = list(re.finditer(r"(.+?) \(([1-9][0-9]*) шт\)(?:, |$)", order.flower))
+        if not matches or "".join(m.group(0) for m in matches) != order.flower:
+            raise OrderError("Состав старого заказа не распознан. Требуется ручная сверка.")
+        items = []
+        for match in matches:
+            name, quantity = match.groups()
+            products = Product.query.filter_by(name=name).all()
+            if len(products) != 1:
+                raise OrderError(
+                    f"Не удалось однозначно найти товар «{name}». Требуется ручная сверка."
+                )
+            items.append({
+                "product_id": products[0].id,
+                "name": name,
+                "quantity": bounded_integer(quantity, MAX_QTY),
+                "price": None,
+            })
+
+    if not isinstance(items, list) or not 1 <= len(items) <= 50:
+        raise OrderError("Некорректный состав заказа. Требуется ручная сверка.")
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            raise OrderError("Некорректная позиция заказа. Требуется ручная сверка.")
+        pid = bounded_integer(item.get("product_id"), 2**63 - 1)
+        qty = bounded_integer(item.get("quantity"), MAX_QTY)
+        if pid is None or qty is None or pid in seen:
+            raise OrderError("Некорректная позиция заказа. Требуется ручная сверка.")
+        seen.add(pid)
+    return items
+
+
+def change_order_status(order, new_status):
+    try:
+        if new_status not in STATUSES:
+            raise OrderError("Неизвестный статус")
+        release = new_status == "cancelled"
+        moves_stock = release != order.stock_released
+        items = order_items(order) if moves_stock else order.items
+        # Claim this transition first: concurrent requests cannot return stock twice.
+        result = db.session.execute(
+            update(Order).where(
+                Order.id == order.id,
+                Order.status == order.status,
+                Order.stock_released == order.stock_released,
+            ).values(status=new_status, stock_released=release, items=items),
+            execution_options={"synchronize_session": False},
+        )
+        if result.rowcount != 1:
+            raise OrderError("Заказ уже изменён. Обновите страницу и повторите действие.")
+        if moves_stock:
+            for item in sorted(items, key=lambda item: int(item["product_id"])):
+                pid, qty = int(item["product_id"]), int(item["quantity"])
+                statement = update(Product).where(Product.id == pid)
+                if release:
+                    statement = statement.where(Product.stock <= MAX_STOCK - qty).values(
+                        stock=Product.stock + qty
+                    )
+                else:
+                    statement = statement.where(
+                        Product.is_active.is_(True), Product.stock >= qty
+                    ).values(stock=Product.stock - qty)
+                result = db.session.execute(
+                    statement, execution_options={"synchronize_session": False}
+                )
+                if result.rowcount != 1:
+                    raise OrderError(
+                        "Не удалось изменить остатки: товар удалён, недоступен или "
+                        "количество выходит за допустимые границы. Требуется сверка."
+                    )
+        db.session.commit()
+    except OrderError as exc:
+        db.session.rollback()
+        return str(exc)
+    except Exception:
+        current_app.logger.exception("Не удалось изменить статус заказа")
+        db.session.rollback()
+        return "Не удалось изменить статус. Попробуйте позже."
+    return ""
 
 
 def format_order_message(order) -> str:

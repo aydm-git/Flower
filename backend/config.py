@@ -16,6 +16,7 @@ if not os.environ.get("SECRET_KEY"):
 
 class Config:
     SECRET_KEY = os.environ["SECRET_KEY"]
+    SHOP_TIMEZONE = os.environ.get("SHOP_TIMEZONE", "Asia/Novosibirsk")
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
