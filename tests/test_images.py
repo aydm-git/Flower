@@ -36,8 +36,8 @@ class ProductImageTests(unittest.TestCase):
                 SQLALCHEMY_DATABASE_URI="sqlite://",
                 UPLOAD_DIR=temporary.name,
             ):
-                from app import app
-        cls.app = app
+                from app import create_app
+                cls.app = create_app()
         cls.app.config["TESTING"] = True
         from models import DEFAULT_PRODUCTS, db
         cls.product_count = len(DEFAULT_PRODUCTS)

@@ -25,6 +25,9 @@ class Order(db.Model):
     flower = db.Column(db.String(1000), nullable=False)
     total = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(20), nullable=False, default="new")
+    # NULL identifies legacy orders whose product IDs were not recorded.
+    items = db.Column(db.JSON, nullable=True)
+    stock_released = db.Column(db.Boolean, nullable=False, default=False)
 
     is_pickup = db.Column(db.Boolean, nullable=False, default=False)
     address = db.Column(db.String(255), nullable=False, default="")
@@ -116,6 +119,8 @@ def ensure_schema() -> None:
     new_order_columns = {
         "total": "total INTEGER NOT NULL DEFAULT 0",
         "status": "status VARCHAR(20) NOT NULL DEFAULT 'new'",
+        "items": "items JSON",
+        "stock_released": "stock_released BOOLEAN NOT NULL DEFAULT 0",
         "is_pickup": "is_pickup BOOLEAN NOT NULL DEFAULT 0",
         "address": "address VARCHAR(255) NOT NULL DEFAULT ''",
         "delivery_date": "delivery_date VARCHAR(10) NOT NULL DEFAULT ''",

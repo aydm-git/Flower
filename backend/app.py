@@ -1,4 +1,5 @@
 import os
+from zoneinfo import ZoneInfo
 
 from flask import Flask, flash, redirect, session, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
@@ -19,6 +20,7 @@ def create_app(config_class=Config):
         instance_path=os.path.join(BASE_DIR, "instance"),
     )
     app.config.from_object(config_class)
+    ZoneInfo(app.config["SHOP_TIMEZONE"])
     os.makedirs(app.config["UPLOAD_DIR"], exist_ok=True)
 
     db.init_app(app)

@@ -1,16 +1,16 @@
 import hmac
-from datetime import date
 
 from flask import (
     Blueprint, current_app, flash, redirect, render_template, request, session, url_for,
 )
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_, update
 from werkzeug.security import check_password_hash
 
 from config import MAX_STOCK
 from helpers import (
-    delivery_date_limits, delete_image_file, parse_cart, place_order, register_failed_login,
-    reset_attempts, save_image, slot_options, too_many_attempts, validate_order_form,
+    CLOSING_HOUR, OPENING_HOUR, change_order_status, delivery_date_limits,
+    delete_image_file, parse_cart, place_order, register_failed_login, reset_attempts,
+    save_image, shop_now, slot_options, too_many_attempts, validate_order_form,
     validate_product_form,
 )
 from models import STATUSES, Order, Product, db, to_ru_date
@@ -53,6 +53,9 @@ def home():
             min_date=min_date,
             max_date=max_date,
             slots=slot_options(),
+            shop_time=shop_now().isoformat(),
+            opening_hour=OPENING_HOUR,
+            closing_hour=CLOSING_HOUR,
         ),
         400 if error else 200,
     )
@@ -151,11 +154,11 @@ def order_list():
         "count": Order.query.count(),
         "new": Order.query.filter_by(status="new").count(),
         "today": Order.query.filter(
-            Order.delivery_date == date.today().isoformat(),
+            Order.delivery_date == shop_now().date().isoformat(),
             Order.status.in_(["new", "in_work"]),
         ).count(),
         "revenue": db.session.query(func.coalesce(func.sum(Order.total), 0))
-        .filter(Order.status != "cancelled")
+        .filter(Order.status == "delivered")
         .scalar(),
     }
     return render_template(
@@ -173,12 +176,11 @@ def order_list():
 def order_status(order_id):
     order = db.get_or_404(Order, order_id)
     new_status = request.form.get("status", "")
-    if new_status in STATUSES:
-        order.status = new_status
-        db.session.commit()
+    error = change_order_status(order, new_status)
+    if not error:
         flash(f"Заказ №{order.id}: статус «{STATUSES[new_status]}»", "ok")
     else:
-        flash("Неизвестный статус", "error")
+        flash(error, "error")
     return _back_to_orders()
 
 
@@ -286,7 +288,12 @@ def product_stock(pid):
     except ValueError:
         delta = 0
     delta = max(-1000, min(1000, delta))
-    product.stock = max(0, min(MAX_STOCK, product.stock + delta))
+    adjusted = Product.stock + delta
+    db.session.execute(
+        update(Product).where(Product.id == product.id).values(stock=case(
+            (adjusted < 0, 0), (adjusted > MAX_STOCK, MAX_STOCK), else_=adjusted
+        )), execution_options={"synchronize_session": False},
+    )
     db.session.commit()
     return redirect(url_for("admin.product_list"))
 
@@ -304,6 +311,21 @@ def product_toggle(pid):
 @admin_bp.route("/products/<int:pid>/delete", methods=["POST"])
 def product_delete(pid):
     product = db.get_or_404(Product, pid)
+    # Serialize with checkout before checking references. Keep IDs needed for returns.
+    db.session.execute(
+        update(Product).where(Product.id == pid).values(is_active=Product.is_active),
+        execution_options={"synchronize_session": False},
+    )
+    for order in Order.query.all():
+        referenced = (
+            any(str(item.get("product_id")) == str(pid) for item in order.items)
+            if isinstance(order.items, list)
+            else f"{product.name} (" in order.flower
+        )
+        if referenced:
+            db.session.rollback()
+            flash("Товар связан с заказом. Скройте его из каталога вместо удаления.", "error")
+            return redirect(url_for("admin.product_list"))
     name, img = product.name, product.img
     db.session.delete(product)
     db.session.commit()

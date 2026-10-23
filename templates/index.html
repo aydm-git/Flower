@@ -126,7 +126,7 @@
       </label>
 
       <label>
-        Время
+        Время ({{ config.SHOP_TIMEZONE }})
         <select name="delivery_time" id="delivery-time" required>
           <option value="">Выберите время</option>
           {% for s in slots %}
@@ -170,20 +170,26 @@
     addr.required = !pickup.checked;
   }
 
-  function pad(n) { return String(n).padStart(2, '0'); }
-  function todayStr() {
-    var d = new Date();
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  }
+  var serverTime = Date.parse({{ shop_time | tojson }});
+  var loadedAt = performance.now();
+  var clock = new Intl.DateTimeFormat('en-CA', {
+    timeZone: {{ config.SHOP_TIMEZONE | tojson }},
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  });
 
   function updateSlots() {
-    var isToday = dateInput.value === todayStr();
-    var now = new Date();
-    var hour = now.getHours() + now.getMinutes() / 60;
+    var parts = {};
+    clock.formatToParts(new Date(serverTime + performance.now() - loadedAt)).forEach(function (part) {
+      parts[part.type] = part.value;
+    });
+    var today = parts.year + '-' + parts.month + '-' + parts.day;
+    var isToday = dateInput.value === today;
+    var hour = Number(parts.hour) + Number(parts.minute) / 60 + Number(parts.second) / 3600;
     Array.prototype.forEach.call(timeSelect.options, function (opt) {
       if (!opt.value) return;
-      var ok = true;
-      if (opt.dataset.asap) ok = isToday;
+      var ok = dateInput.value >= today;
+      if (opt.dataset.asap) ok = isToday && hour >= {{ opening_hour }} && hour + 2 <= {{ closing_hour }};
       else if (isToday) ok = Number(opt.dataset.end) > hour + 1;
       opt.disabled = !ok;
     });
@@ -193,6 +199,8 @@
 
   pickup.addEventListener('change', togglePickup);
   dateInput.addEventListener('change', updateSlots);
+  window.addEventListener('pageshow', updateSlots);
+  setInterval(updateSlots, 30000);
   togglePickup();
   updateSlots();
 })();
