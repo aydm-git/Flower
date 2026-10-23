@@ -45,10 +45,17 @@
                       <button type="submit" class="round-btn" aria-label="Добавить">+</button>
                     </form>
                   </div>
+                  <form method="post" action="{{ url_for('admin.product_stock', pid=p.id) }}" class="stock-delta">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="number" name="delta" step="1" min="-{{ max_stock }}" max="{{ max_stock }}"
+                           placeholder="±шт" aria-label="Изменить остаток на" required>
+                    <button type="submit" class="btn-icon">OK</button>
+                  </form>
                 </td>
                 <td>
                   <form method="post" action="{{ url_for('admin.product_toggle', pid=p.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="active" value="{{ '0' if p.is_active else '1' }}">
                     <button type="submit" class="pill {{ 'pill-on' if p.is_active else 'pill-off' }}">
                       {{ 'Показан' if p.is_active else 'Скрыт' }}
                     </button>
@@ -58,7 +65,7 @@
                   <div class="row-actions">
                     <a href="{{ url_for('admin.product_edit', pid=p.id) }}" class="btn-icon">Изменить</a>
                     <form method="post" action="{{ url_for('admin.product_delete', pid=p.id) }}"
-                          onsubmit="return confirm('Удалить товар «{{ p.name }}»? Это нельзя отменить.')">
+                          data-confirm="Удалить товар «{{ p.name }}»? Это нельзя отменить.">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="btn-icon btn-icon-danger">Удалить</button>
                     </form>
@@ -74,4 +81,8 @@
     {% endif %}
   </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 {% endblock %}

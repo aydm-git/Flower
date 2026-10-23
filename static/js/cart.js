@@ -154,8 +154,10 @@
     saveCart(cart);
 
     if (cartField) {
+      // Цена отправляется, чтобы сервер отклонил заказ, если она изменилась
+      // после загрузки страницы и покупатель не видел новую сумму.
       cartField.value = JSON.stringify(
-        cart.map((i) => ({ id: i.id, quantity: i.quantity }))
+        cart.map((i) => ({ id: i.id, quantity: i.quantity, price: i.price }))
       );
     }
 

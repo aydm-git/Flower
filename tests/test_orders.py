@@ -141,7 +141,7 @@ class OrderTests(unittest.TestCase):
             order = self.buy()
             self.assertEqual(order.date, "2026-10-24 01:00:00")
             page = self.client.get("/").get_data(as_text=True)
-            self.assertIn('timeZone: "Asia/Novosibirsk"', page)
+            self.assertIn('data-timezone="Asia/Novosibirsk"', page)
             self.assertIn('min="2026-10-24"', page)
 
     def test_checkout_records_structured_items_and_total(self):
@@ -157,8 +157,8 @@ class OrderTests(unittest.TestCase):
         barrier = threading.Barrier(2)
         original = self.helpers.build_order
 
-        def synchronized_build(cart):
-            result = original(cart)
+        def synchronized_build(*args):
+            result = original(*args)
             barrier.wait(timeout=10)
             return result
 
@@ -176,8 +176,8 @@ class OrderTests(unittest.TestCase):
     def test_stock_conflict_rolls_back_all_items(self):
         original = self.helpers.build_order
 
-        def changed_stock(cart):
-            result = original(cart)
+        def changed_stock(*args):
+            result = original(*args)
             self.Product.query.filter_by(id=2).update({"stock": 0})
             self.db.session.commit()
             return result
