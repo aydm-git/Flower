@@ -27,7 +27,7 @@
 
   let memoryFallback = [];
 
-  function loadCart() {
+  function readStored() {
     let raw = memoryFallback;
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -35,25 +35,37 @@
     } catch (e) {
     }
 
-    const cart = [];
+    const items = [];
     raw.forEach((item) => {
-      const product = item && catalog[String(item.id)];
       const qty = parseInt(item && item.quantity, 10);
-      if (!product || !(qty > 0)) return;
+      if (!item || item.id === undefined || !(qty > 0)) return;
+      items.push({ id: String(item.id), quantity: Math.min(qty, MAX_QTY) });
+    });
+    return items;
+  }
+
+  function writeStored(items) {
+    memoryFallback = items;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (e) {
+    }
+  }
+
+  function loadCart() {
+    const cart = [];
+    readStored().forEach((item) => {
+      const product = catalog[item.id];
+      if (!product) return;
       const limit = Math.min(MAX_QTY, product.stock);
       if (limit < 1) return;
-      cart.push({ ...product, quantity: Math.min(qty, limit) });
+      cart.push({ ...product, quantity: Math.min(item.quantity, limit) });
     });
     return cart;
   }
 
   function saveCart(cart) {
-    const compact = cart.map((i) => ({ id: i.id, quantity: i.quantity }));
-    memoryFallback = compact;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(compact));
-    } catch (e) {
-    }
+    writeStored(cart.map((i) => ({ id: i.id, quantity: i.quantity })));
   }
 
   function showToast(message) {
@@ -75,18 +87,19 @@
     const product = catalog[id];
     if (!product) return;
 
-    const cart = loadCart();
-    const existing = cart.find((i) => i.id === id);
+    const limit = Math.min(MAX_QTY, product.stock);
+    const items = readStored();
+    const existing = items.find((i) => i.id === id);
     if (existing) {
-      if (existing.quantity >= Math.min(MAX_QTY, product.stock)) {
+      if (existing.quantity >= limit) {
         showToast(`«${product.name}»: больше нет в наличии`);
         return;
       }
       existing.quantity += 1;
     } else {
-      cart.push({ ...product, quantity: 1 });
+      items.push({ id, quantity: 1 });
     }
-    saveCart(cart);
+    writeStored(items);
     showToast(`«${product.name}» добавлен в корзину!`);
     renderCart();
   }
@@ -105,10 +118,11 @@
   }
 
   function clearCart() {
-    saveCart([]);
+    writeStored([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {  }
+    } catch (e) {
+    }
     renderCart();
   }
 
@@ -137,6 +151,7 @@
     if (!summary || !cartList) return;
 
     const cart = loadCart();
+    saveCart(cart);
 
     if (cartField) {
       cartField.value = JSON.stringify(
@@ -220,10 +235,11 @@
   }
 
   if (document.querySelector('[data-clear-cart]')) {
-    saveCart([]);
+    writeStored([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {  }
+    } catch (e) {
+    }
   }
 
   window.addEventListener('pageshow', () => {

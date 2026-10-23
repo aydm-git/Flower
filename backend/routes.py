@@ -58,6 +58,18 @@ def home():
     )
 
 
+@shop_bp.route("/product/<int:pid>")
+def product_page(pid):
+    item = Product.query.filter_by(id=pid, is_active=True).first_or_404()
+    others = (
+        Product.query.filter(Product.id != pid, Product.is_active.is_(True))
+        .order_by(Product.id)
+        .limit(3)
+        .all()
+    )
+    return render_template("product.html", product=item, others=others)
+
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("logged_in"):
@@ -260,6 +272,8 @@ def product_edit(pid):
         "price": product.price,
         "stock": product.stock,
         "is_active": "1" if product.is_active else "",
+        "composition": product.composition,
+        "description": product.description,
     }
     return render_template(PRODUCT_FORM, product=product, form=form, errors=[], active="products")
 
