@@ -3,7 +3,10 @@
   <div class="admin-tabs">
     <a href="{{ url_for('admin.order_list') }}" class="{{ 'active' if active == 'orders' else '' }}">Заказы</a>
     <a href="{{ url_for('admin.product_list') }}" class="{{ 'active' if active == 'products' else '' }}">Товары</a>
-    <a href="{{ url_for('auth.logout') }}" class="admin-logout">Выйти</a>
+    <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="admin-logout">Выйти</button>
+    </form>
   </div>
 </div>
 
