@@ -27,10 +27,18 @@
         <input type="number" name="price" required min="1" max="1000000" step="1" value="{{ form.get('price', '') }}">
       </label>
 
+      {% if product %}
+      <p class="form-note">
+        Остаток на складе: <strong>{{ product.stock }} шт.</strong>
+        Меняйте его кнопками «−», «+» или полем «±шт» в списке товаров —
+        так продажи, прошедшие пока открыта эта форма, не потеряются.
+      </p>
+      {% else %}
       <label>
         Количество на складе
         <input type="number" name="stock" required min="0" max="10000" step="1" value="{{ form.get('stock', '') }}">
       </label>
+      {% endif %}
 
       <label>
         Состав <span class="opt">(необязательно)</span>

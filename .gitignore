@@ -8,3 +8,5 @@ venv/
 .venv/
 
 static/uploads/
+*.db-wal
+*.db-shm

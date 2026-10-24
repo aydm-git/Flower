@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} — Чечектер{% endblock %}
+
+{% block content %}
+<section class="section">
+  <div class="container error-page">
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <a href="{{ url_for('shop.home') }}" class="btn">На главную</a>
+  </div>
+</section>
+{% endblock %}

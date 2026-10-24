@@ -79,8 +79,14 @@
       <div class="message error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="{{ url_for('shop.home') }}#order" class="order-form" id="order-form">
+    <form method="post" action="{{ url_for('shop.home') }}#order" class="order-form" id="order-form"
+          data-shop-time="{{ shop_time }}"
+          data-timezone="{{ config.SHOP_TIMEZONE }}"
+          data-opening-hour="{{ opening_hour }}"
+          data-closing-hour="{{ closing_hour }}"
+          data-max-date="{{ max_date }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="order_token" value="{{ order_token }}">
       <input type="hidden" name="cart" id="cart-field" value="[]">
 
       <label>
@@ -92,7 +98,7 @@
       <label>
         Телефон
         <input type="tel" name="phone" required inputmode="tel" autocomplete="tel"
-               pattern="^\+?[0-9\s\-\(\)]{10,20}$"
+               pattern="\+?[0-9 \-\(\)]{10,20}"
                title="Введите номер телефона (только цифры, можно +, пробелы, дефисы и скобки)"
                value="{{ form.get('phone', '') }}">
       </label>
@@ -122,11 +128,14 @@
         Дата
         <input type="date" name="delivery_date" id="delivery-date" required
                min="{{ min_date }}" max="{{ max_date }}"
-               value="{{ form.get('delivery_date') or min_date }}">
+               value="{{ date_value }}">
       </label>
+      <p class="form-hint" id="date-hint"{% if min_date <= shop_time[:10] or date_value != min_date %} hidden{% endif %}>
+        На сегодня доставка и самовывоз уже недоступны — выбрана ближайшая дата.
+      </p>
 
       <label>
-        Время
+        Время ({{ config.SHOP_TIMEZONE }})
         <select name="delivery_time" id="delivery-time" required>
           <option value="">Выберите время</option>
           {% for s in slots %}
@@ -156,45 +165,5 @@
 </section>
 
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
-<script>
-(function () {
-  var pickup = document.getElementById('is-pickup');
-  var addrWrap = document.getElementById('address-wrap');
-  var addr = document.getElementById('address-input');
-  var dateInput = document.getElementById('delivery-date');
-  var timeSelect = document.getElementById('delivery-time');
-  if (!pickup || !addrWrap || !addr || !dateInput || !timeSelect) return;
-
-  function togglePickup() {
-    addrWrap.hidden = pickup.checked;
-    addr.required = !pickup.checked;
-  }
-
-  function pad(n) { return String(n).padStart(2, '0'); }
-  function todayStr() {
-    var d = new Date();
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  }
-
-  function updateSlots() {
-    var isToday = dateInput.value === todayStr();
-    var now = new Date();
-    var hour = now.getHours() + now.getMinutes() / 60;
-    Array.prototype.forEach.call(timeSelect.options, function (opt) {
-      if (!opt.value) return;
-      var ok = true;
-      if (opt.dataset.asap) ok = isToday;
-      else if (isToday) ok = Number(opt.dataset.end) > hour + 1;
-      opt.disabled = !ok;
-    });
-    var selected = timeSelect.options[timeSelect.selectedIndex];
-    if (selected && selected.disabled) timeSelect.value = '';
-  }
-
-  pickup.addEventListener('change', togglePickup);
-  dateInput.addEventListener('change', updateSlots);
-  togglePickup();
-  updateSlots();
-})();
-</script>
+<script src="{{ url_for('static', filename='js/order-form.js') }}"></script>
 {% endblock %}
