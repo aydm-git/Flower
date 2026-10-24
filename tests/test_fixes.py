@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import struct
 import sys
 import tempfile
@@ -372,6 +373,63 @@ class FixTests(unittest.TestCase):
         self.client.post("/admin/products/2/delete")
         self.db.session.expire_all()
         self.assertIsNotNone(self.db.session.get(self.Product, 2))
+
+
+    # --- Каталог списком и популярные букеты ---
+    def add_products(self):
+        self.db.session.add_all([
+            self.Product(id=3, name="Альстромерии", price=900, stock=4, img="images/mix.jpeg",
+                         composition="Альстромерии, зелень"),
+            self.Product(id=4, name="Пионы", price=5000, stock=0, img="images/box.jpg"),
+            self.Product(id=5, name="Гортензия", price=3000, stock=10, img="images/box.jpg"),
+            self.Product(id=6, name="Скрытый", price=100, stock=9, img="images/box.jpg",
+                         is_active=False),
+        ])
+        self.db.session.commit()
+
+    def test_catalog_lists_all_active_products(self):
+        self.add_products()
+        page = self.client.get("/catalog").get_data(as_text=True)
+        for name in ["Розы", "Тюльпаны", "Альстромерии", "Пионы", "Гортензия"]:
+            self.assertIn(name, page)
+        self.assertNotIn("Скрытый", page)
+        self.assertIn("Альстромерии, зелень", page)
+        self.assertEqual(page.count('class="catalog-item'), 5)
+
+    def test_catalog_sorting_keeps_sold_out_last(self):
+        self.add_products()
+
+        def order(sort):
+            page = self.client.get("/catalog", query_string={"sort": sort}).get_data(as_text=True)
+            names = ["Розы", "Тюльпаны", "Альстромерии", "Пионы", "Гортензия"]
+            return sorted(names, key=lambda n: page.index(f">{n}</a>"))
+
+        self.assertEqual(order("cheap"),
+                         ["Альстромерии", "Тюльпаны", "Розы", "Гортензия", "Пионы"])
+        self.assertEqual(order("expensive"),
+                         ["Гортензия", "Розы", "Тюльпаны", "Альстромерии", "Пионы"])
+        self.assertEqual(order("name"),
+                         ["Альстромерии", "Гортензия", "Розы", "Тюльпаны", "Пионы"])
+        self.assertEqual(self.client.get("/catalog?sort=bogus").status_code, 200)
+
+    def test_home_shows_best_sellers_and_cancelled_orders_do_not_count(self):
+        self.add_products()
+        self.buy({5: 2})
+        self.buy({3: 1})
+        cancelled = self.buy({2: 3})
+        self.assertEqual(self.helpers.change_order_status(cancelled, "cancelled"), "")
+        sales = self.helpers.product_sales()
+        self.assertEqual(sales, {5: 2, 3: 1})
+        page = self.client.get("/").get_data(as_text=True)
+        catalog = page[page.index('id="catalog"'):page.index('id="order"')]
+        self.assertEqual(len(re.findall(r'class="card(?: card-soldout)?"', catalog)),
+                         self.helpers.POPULAR_LIMIT)
+        self.assertLess(catalog.index(">Гортензия</a>"), catalog.index(">Альстромерии</a>"))
+        self.assertLess(catalog.index(">Альстромерии</a>"), catalog.index(">Розы</a>"))
+        self.assertNotIn("Пионы", catalog)  # нет в наличии — уступает место
+        self.assertIn("Весь каталог (5)", catalog)
+        listing = self.client.get("/catalog").get_data(as_text=True)
+        self.assertEqual(listing.count("badge-hit"), 2)
 
 
 if __name__ == "__main__":

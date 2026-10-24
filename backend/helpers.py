@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from flask import current_app
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from config import MAX_PRICE, MAX_QTY, MAX_STOCK
@@ -305,6 +305,26 @@ def build_order(cart: dict, expected_prices: dict = None):
         lines.append((product, qty))
         total += product.price * qty
     return lines, total, ""
+
+
+POPULAR_LIMIT = 4
+
+
+def product_sales() -> dict:
+    """Продано штук по каждому товару (без отменённых заказов): {id: количество}."""
+    rows = db.session.execute(text(
+        "SELECT CAST(json_extract(j.value, '$.product_id') AS INTEGER) AS pid, "
+        "SUM(CAST(json_extract(j.value, '$.quantity') AS INTEGER)) AS qty "
+        'FROM "order" AS o, json_each(o.items) AS j '
+        "WHERE o.status != 'cancelled' AND o.items IS NOT NULL "
+        "AND json_type(o.items) = 'array' GROUP BY pid"
+    )).all()
+    return {pid: qty for pid, qty in rows if pid and qty}
+
+
+def by_popularity(products, sales: dict) -> list:
+    """Сначала товары в наличии, затем по числу продаж; при равенстве — по порядку в каталоге."""
+    return sorted(products, key=lambda p: (p.stock < 1, -sales.get(p.id, 0), p.id))
 
 
 def _existing_order(client_token):

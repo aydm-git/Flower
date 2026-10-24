@@ -13,6 +13,8 @@
   const submitBtn = document.getElementById('submit-btn');
   const clearBtn = document.getElementById('clear-cart-btn');
   const toastContainer = document.getElementById('toast-container');
+  const cartMini = document.getElementById('cart-mini');
+  const cartMiniCount = document.getElementById('cart-mini-count');
 
   const catalog = {};
   document.querySelectorAll('.add-to-cart').forEach((btn) => {
@@ -147,7 +149,16 @@
     return b;
   }
 
+  // Кнопка «Оформить заказ (N)» на страницах без формы заказа (каталог).
+  function updateMini() {
+    if (!cartMini || !cartMiniCount) return;
+    const count = readStored().reduce((sum, item) => sum + item.quantity, 0);
+    cartMiniCount.textContent = String(count);
+    cartMini.hidden = count === 0;
+  }
+
   function renderCart() {
+    updateMini();
     if (!summary || !cartList) return;
 
     const cart = loadCart();

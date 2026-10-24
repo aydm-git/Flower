@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Каталог букетов — Чечектер{% endblock %}
+
+{% block content %}
+<div id="toast-container"></div>
+
+<section class="section catalog-page">
+  <div class="container">
+    <h2>Каталог букетов</h2>
+
+    <div class="catalog-toolbar">
+      <div class="catalog-sort" role="group" aria-label="Сортировка">
+        {% for key, label in sorts.items() %}
+          <a href="{{ url_for('shop.catalog', sort=None if key == 'popular' else key) }}"
+             class="{{ 'active' if key == sort else '' }}"{% if key == sort %} aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </div>
+      <a href="{{ url_for('shop.home', _anchor='order') }}" class="btn btn-small" id="cart-mini" hidden>
+        Оформить заказ (<span id="cart-mini-count">0</span>)
+      </a>
+    </div>
+
+    {% if products %}
+      <ul class="catalog-list">
+        {% for p in products %}
+          <li class="catalog-item{% if p.stock < 1 %} card-soldout{% endif %}">
+            <a href="{{ url_for('shop.product_page', pid=p.id) }}" class="catalog-photo">
+              <img src="{{ url_for('static', filename=p.img) }}" alt="{{ p.name }}" loading="lazy">
+            </a>
+            <div class="catalog-info">
+              <h3>
+                <a href="{{ url_for('shop.product_page', pid=p.id) }}">{{ p.name }}</a>
+                {% if p.id in popular_ids %}<span class="badge-hit">Популярный</span>{% endif %}
+              </h3>
+              {% if p.composition %}<p class="catalog-composition">{{ p.composition }}</p>{% endif %}
+              {% if p.description %}<p class="catalog-desc">{{ p.description | truncate(160) }}</p>{% endif %}
+              {% if p.stock < 1 %}
+                <p class="stock-note">Нет в наличии</p>
+              {% elif p.stock <= 5 %}
+                <p class="stock-note">Осталось {{ p.stock }} шт.</p>
+              {% endif %}
+            </div>
+            <div class="catalog-buy">
+              <div class="price">{{ p.price }} ₽</div>
+              {% if p.stock < 1 %}
+                <button type="button" class="btn" disabled>Нет в наличии</button>
+              {% else %}
+                <button type="button" class="btn add-to-cart"
+                        data-id="{{ p.id }}"
+                        data-name="{{ p.name }}"
+                        data-price="{{ p.price }}"
+                        data-stock="{{ p.stock }}"
+                        data-img="{{ url_for('static', filename=p.img) }}">
+                  В корзину
+                </button>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-note">Каталог скоро пополнится. Загляните позже 🌸</p>
+    {% endif %}
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+{% endblock %}
