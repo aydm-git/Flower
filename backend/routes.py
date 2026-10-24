@@ -8,7 +8,8 @@ from werkzeug.security import check_password_hash
 
 from config import MAX_STOCK
 from helpers import (
-    CLOSING_HOUR, OPENING_HOUR, STATUS_TRANSITIONS, change_order_status, clean_order_token,
+    CLOSING_HOUR, OPENING_HOUR, POPULAR_LIMIT, STATUS_TRANSITIONS, by_popularity,
+    change_order_status, clean_order_token, product_sales,
     delete_image_file, delivery_date_limits, new_order_token, parse_iso_date, place_order,
     read_cart, register_failed_login, reset_attempts, save_image, shop_now, slot_options,
     too_many_attempts, validate_order_form, validate_product_form,
@@ -62,11 +63,13 @@ def home():
     # Если сегодня интервалов уже нет, дата сама переносится на ближайший доступный день.
     chosen = parse_iso_date(form.get("delivery_date", ""))
     date_value = chosen.isoformat() if chosen and min_date <= chosen.isoformat() <= max_date else min_date
-    products = Product.query.filter_by(is_active=True).order_by(Product.id).all()
+    catalog = Product.query.filter_by(is_active=True).order_by(Product.id).all()
+    products = by_popularity(catalog, product_sales())[:POPULAR_LIMIT]
     return (
         render_template(
             "index.html",
             products=products,
+            catalog_size=len(catalog),
             error=error,
             form=form,
             min_date=min_date,
@@ -79,6 +82,42 @@ def home():
             closing_hour=CLOSING_HOUR,
         ),
         400 if error else 200,
+    )
+
+
+CATALOG_SORTS = {
+    "popular": "По популярности",
+    "cheap": "Сначала дешевле",
+    "expensive": "Сначала дороже",
+    "name": "По названию",
+}
+
+
+@shop_bp.route("/catalog")
+def catalog():
+    sort = request.args.get("sort", "popular")
+    if sort not in CATALOG_SORTS:
+        sort = "popular"
+    products = Product.query.filter_by(is_active=True).order_by(Product.id).all()
+    sales = product_sales()
+    popular_ids = {
+        p.id for p in by_popularity(products, sales)[:POPULAR_LIMIT] if sales.get(p.id)
+    }
+    if sort == "popular":
+        products = by_popularity(products, sales)
+    else:
+        keys = {
+            "cheap": lambda p: (p.stock < 1, p.price, p.id),
+            "expensive": lambda p: (p.stock < 1, -p.price, p.id),
+            "name": lambda p: (p.stock < 1, p.name.casefold(), p.id),
+        }
+        products = sorted(products, key=keys[sort])
+    return render_template(
+        "catalog.html",
+        products=products,
+        popular_ids=popular_ids,
+        sort=sort,
+        sorts=CATALOG_SORTS,
     )
 
 

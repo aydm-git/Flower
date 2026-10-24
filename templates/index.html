@@ -45,6 +45,9 @@
         </div>
       {% endfor %}
     </div>
+    <div class="catalog-more">
+      <a href="{{ url_for('shop.catalog') }}" class="btn btn-outline">Весь каталог ({{ catalog_size }}) →</a>
+    </div>
     {% else %}
       <p class="empty-note">Каталог скоро пополнится. Загляните позже 🌸</p>
     {% endif %}
