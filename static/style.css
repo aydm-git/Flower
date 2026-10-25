@@ -698,3 +698,8 @@ footer a:hover { text-decoration: underline; }
   .catalog-buy .price { margin: 0; }
   .catalog-buy .btn { width: auto; }
 }
+
+.telegram-toolbar { display: flex; justify-content: flex-end; }
+.tg-status { margin-top: 6px; font-size: 12px; color: #777; white-space: nowrap; }
+.tg-status.tg-failed { color: #b3261e; font-weight: 700; }
+.tg-error { font-size: 12px; color: #b3261e; max-width: 260px; margin: 2px 0 6px; }

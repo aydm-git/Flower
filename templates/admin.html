@@ -16,6 +16,23 @@
       <div class="stat"><span class="stat-num">{{ stats.revenue }} ₽</span><span class="stat-label">выручка за всё время (доставленные заказы)</span></div>
     </div>
 
+    {% if stats.notify_failed %}
+      <div class="admin-flash err">
+        {{ stats.notify_failed }} заказ(ов) не отправлены в Telegram — причина указана у заказа.
+        Нажмите «Проверить Telegram», чтобы найти проблему, затем отправьте заказы повторно.
+      </div>
+    {% endif %}
+
+    <div class="toolbar telegram-toolbar">
+      <form method="post" action="{{ url_for('admin.telegram_check') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="f_status" value="{{ f_status }}">
+        <input type="hidden" name="f_q" value="{{ f_q }}">
+        <input type="hidden" name="f_page" value="{{ pagination.page }}">
+        <button type="submit" class="btn-icon">Проверить Telegram</button>
+      </form>
+    </div>
+
     <form method="get" class="filter-row">
       <input type="search" name="q" value="{{ f_q }}" placeholder="Поиск: №, имя, телефон, адрес, букет">
       <select name="status">
@@ -76,6 +93,19 @@
                       {% endfor %}
                     </select>
                   </form>
+                  {% if order.notify_status == 'failed' %}
+                    <div class="tg-status tg-failed" title="{{ order.notify_error }}">Telegram: не отправлено</div>
+                    <div class="tg-error">{{ order.notify_error }}</div>
+                    <form method="post" action="{{ url_for('admin.order_notify', order_id=order.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="f_status" value="{{ f_status }}">
+                      <input type="hidden" name="f_q" value="{{ f_q }}">
+                      <input type="hidden" name="f_page" value="{{ pagination.page }}">
+                      <button type="submit" class="btn-icon">Отправить повторно</button>
+                    </form>
+                  {% elif order.notify_status == 'pending' %}
+                    <div class="tg-status">Telegram: отправляется…</div>
+                  {% endif %}
                 </td>
                 <td>
                   {% if order.status == 'cancelled' and order.stock_released %}

@@ -224,15 +224,17 @@ class FixTests(unittest.TestCase):
         self.assertIn("полный состав — в админке", text)
         self.assertNotRegex(text, r"&(?!amp;|lt;|gt;|quot;|#x27;)")
 
-    def test_telegram_error_logs_status_code(self):
-        import requests
-        response = requests.Response()
-        response.status_code = 400
-        with patch.object(self.helpers.requests, "post",
-                          side_effect=requests.HTTPError(response=response)), \
-                self.assertLogs(self.app.logger, level="ERROR") as logs:
-            self.helpers.send_telegram("t", ["1"], "x", self.app.logger)
-        self.assertIn("HTTPError 400", logs.output[0])
+    def test_telegram_error_reports_status_code(self):
+        class Response:
+            status_code = 400
+
+            def json(self):
+                return {"ok": False, "description": "Bad Request: can't parse entities"}
+
+        with patch.object(self.helpers.requests, "post", return_value=Response()):
+            _, error, retryable = self.helpers.telegram_call("t", "sendMessage", {})
+        self.assertIn("код 400", error)
+        self.assertFalse(retryable)
 
     # --- Н-1 / Н-6: фото ---
     def test_image_with_appended_payload_is_rejected(self):

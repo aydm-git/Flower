@@ -59,6 +59,10 @@ class Order(db.Model):
     comment = db.Column(db.String(500), nullable=False, default="")
     # Одноразовый токен формы: повторная отправка не создаёт второй заказ.
     client_token = db.Column(db.String(64), nullable=True, unique=True, index=True)
+    # Уведомление в Telegram: off — не настроено, pending — отправляется,
+    # sent — доставлено во все чаты, failed — ошибка (причина в notify_error).
+    notify_status = db.Column(db.String(20), nullable=False, default="")
+    notify_error = db.Column(db.String(500), nullable=False, default="")
 
     @property
     def delivery_date_ru(self) -> str:
@@ -167,6 +171,8 @@ def ensure_schema() -> None:
         "card_text": "card_text VARCHAR(300) NOT NULL DEFAULT ''",
         "comment": "comment VARCHAR(500) NOT NULL DEFAULT ''",
         "client_token": "client_token VARCHAR(64)",
+        "notify_status": "notify_status VARCHAR(20) NOT NULL DEFAULT ''",
+        "notify_error": "notify_error VARCHAR(500) NOT NULL DEFAULT ''",
     }
     for column_name, ddl in new_order_columns.items():
         add_column_if_missing(Order, column_name, ddl)
