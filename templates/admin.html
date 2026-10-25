@@ -23,6 +23,13 @@
       </div>
     {% endif %}
 
+    {% if stats.email_failed %}
+      <div class="admin-flash err">
+        {{ stats.email_failed }} заказ(ов) не отправлены на почту — причина указана у заказа.
+        Проверьте настройки на вкладке «Настройки» (там есть тестовое письмо), затем отправьте заказы повторно.
+      </div>
+    {% endif %}
+
     <div class="toolbar telegram-toolbar">
       <form method="post" action="{{ url_for('admin.telegram_check') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -105,6 +112,19 @@
                     </form>
                   {% elif order.notify_status == 'pending' %}
                     <div class="tg-status">Telegram: отправляется…</div>
+                  {% endif %}
+                  {% if order.email_status == 'failed' %}
+                    <div class="tg-status tg-failed" title="{{ order.email_error }}">Почта: не отправлено</div>
+                    <div class="tg-error">{{ order.email_error }}</div>
+                    <form method="post" action="{{ url_for('admin.order_email', order_id=order.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="f_status" value="{{ f_status }}">
+                      <input type="hidden" name="f_q" value="{{ f_q }}">
+                      <input type="hidden" name="f_page" value="{{ pagination.page }}">
+                      <button type="submit" class="btn-icon">Отправить письмо повторно</button>
+                    </form>
+                  {% elif order.email_status == 'pending' %}
+                    <div class="tg-status">Почта: отправляется…</div>
                   {% endif %}
                 </td>
                 <td>

@@ -63,6 +63,9 @@ class Order(db.Model):
     # sent — доставлено во все чаты, failed — ошибка (причина в notify_error).
     notify_status = db.Column(db.String(20), nullable=False, default="")
     notify_error = db.Column(db.String(500), nullable=False, default="")
+    # Письмо о заказе на почту из настроек админки: те же статусы, что и у Telegram.
+    email_status = db.Column(db.String(20), nullable=False, default="")
+    email_error = db.Column(db.String(500), nullable=False, default="")
 
     @property
     def delivery_date_ru(self) -> str:
@@ -92,7 +95,7 @@ class AppMeta(db.Model):
     """Служебные отметки (например, что демо-товары уже добавлены)."""
 
     key = db.Column(db.String(50), primary_key=True)
-    value = db.Column(db.String(255), nullable=False, default="")
+    value = db.Column(db.Text, nullable=False, default="")
 
 
 DEFAULT_PRODUCTS = [
@@ -173,6 +176,8 @@ def ensure_schema() -> None:
         "client_token": "client_token VARCHAR(64)",
         "notify_status": "notify_status VARCHAR(20) NOT NULL DEFAULT ''",
         "notify_error": "notify_error VARCHAR(500) NOT NULL DEFAULT ''",
+        "email_status": "email_status VARCHAR(20) NOT NULL DEFAULT ''",
+        "email_error": "email_error VARCHAR(500) NOT NULL DEFAULT ''",
     }
     for column_name, ddl in new_order_columns.items():
         add_column_if_missing(Order, column_name, ddl)

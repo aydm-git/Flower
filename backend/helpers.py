@@ -15,6 +15,7 @@ from flask import current_app
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 
+import mailer
 from config import MAX_PRICE, MAX_QTY, MAX_STOCK
 from models import STATUSES, LoginAttempt, Order, Product, db
 
@@ -367,7 +368,8 @@ def place_order(data: dict, cart: dict, expected_prices: dict = None, client_tok
         token, chat_ids = telegram_settings()
         order = Order(
             date=now, flower=flower, total=total, items=items, client_token=client_token,
-            notify_status="pending" if token and chat_ids else "off", **data,
+            notify_status="pending" if token and chat_ids else "off",
+            email_status="pending" if mailer.email_enabled() else "off", **data,
         )
         db.session.add(order)
         db.session.commit()
@@ -388,7 +390,16 @@ def place_order(data: dict, cart: dict, expected_prices: dict = None, client_tok
         return 0, "Произошла ошибка. Попробуйте позже."
 
     notify_new_order(order)
+    mailer.notify_order_email(order, order_admin_url(order.id))
     return total, ""
+
+
+def order_admin_url(order_id: int) -> str:
+    """Ссылка на заказ в админке для письма (если есть текущий запрос)."""
+    from flask import has_request_context, url_for
+    if not has_request_context():
+        return ""
+    return url_for("admin.order_list", q=f"№{order_id}", _external=True)
 
 
 class OrderError(ValueError):

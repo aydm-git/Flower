@@ -6,11 +6,12 @@ from flask import (
 from sqlalchemy import case, func, or_, select, text, update
 from werkzeug.security import check_password_hash
 
+import mailer
 from config import MAX_STOCK
 from helpers import (
     CLOSING_HOUR, OPENING_HOUR, POPULAR_LIMIT, STATUS_TRANSITIONS, by_popularity,
     change_order_status, check_telegram, clean_order_token, product_sales,
-    resend_order_notification,
+    order_admin_url, resend_order_notification,
     delete_image_file, delivery_date_limits, new_order_token, parse_iso_date, place_order,
     read_cart, register_failed_login, reset_attempts, save_image, shop_now, slot_options,
     too_many_attempts, validate_order_form, validate_product_form,
@@ -243,6 +244,7 @@ def order_list():
         ).scalar(),
         "month_name": MONTHS[now.month - 1],
         "notify_failed": Order.query.filter_by(notify_status="failed").count(),
+        "email_failed": Order.query.filter_by(email_status="failed").count(),
     }
     pagination = query.order_by(Order.id.desc()).paginate(
         page=page, per_page=current_app.config.get("ORDERS_PER_PAGE", 50), error_out=False
@@ -282,6 +284,53 @@ def order_notify(order_id):
     else:
         flash(f"Заказ №{order_id} отправлен в Telegram", "ok")
     return _back_to_orders()
+
+
+@admin_bp.route("/orders/<int:order_id>/email", methods=["POST"])
+def order_email(order_id):
+    order = db.get_or_404(Order, order_id)
+    error = mailer.resend_order_email(order, order_admin_url(order_id))
+    if error:
+        flash(f"Заказ №{order_id}: письмо не отправлено — {error}", "error")
+    else:
+        flash(f"Заказ №{order_id} отправлен на почту", "ok")
+    return _back_to_orders()
+
+
+@admin_bp.route("/settings", methods=["GET", "POST"])
+def settings():
+    if request.method == "POST":
+        raw = request.form.get("order_emails", "")
+        emails, error = mailer.save_order_emails(raw)
+        if error:
+            flash(error, "error")
+            return render_template(
+                "admin_settings.html", order_emails=raw, smtp=mailer.smtp_settings(),
+                smtp_problem=mailer.smtp_problem(mailer.smtp_settings()), active="settings",
+            ), 400
+        if emails:
+            flash("Почта для заказов сохранена: " + ", ".join(emails), "ok")
+        else:
+            flash("Почта для заказов очищена — письма о заказах отправляться не будут", "ok")
+        return redirect(url_for("admin.settings"))
+    smtp = mailer.smtp_settings()
+    return render_template(
+        "admin_settings.html",
+        order_emails=", ".join(mailer.get_order_emails()),
+        smtp=smtp,
+        smtp_problem=mailer.smtp_problem(smtp),
+        active="settings",
+    )
+
+
+@admin_bp.route("/settings/test-email", methods=["POST"])
+def settings_test_email():
+    error = mailer.send_test_email()
+    if error:
+        flash(f"Тестовое письмо не отправлено: {error}", "error")
+    else:
+        flash("Тестовое письмо отправлено: " + ", ".join(mailer.get_order_emails()), "ok")
+    return redirect(url_for("admin.settings"))
 
 
 @admin_bp.route("/telegram/check", methods=["POST"])

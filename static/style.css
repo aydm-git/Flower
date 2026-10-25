@@ -703,3 +703,10 @@ footer a:hover { text-decoration: underline; }
 .tg-status { margin-top: 6px; font-size: 12px; color: #777; white-space: nowrap; }
 .tg-status.tg-failed { color: #b3261e; font-weight: 700; }
 .tg-error { font-size: 12px; color: #b3261e; max-width: 260px; margin: 2px 0 6px; }
+
+.settings-card { max-width: 640px; margin: 0 auto; }
+.settings-card .form-note { margin-bottom: 14px; }
+.settings-list { list-style: none; padding: 0; margin: 8px 0 14px; font-size: 14px; color: #444; line-height: 1.8; }
+.settings-card .btn-icon:disabled { opacity: .5; cursor: not-allowed; }
+.settings-card .order-form { max-width: none; margin: 0 0 18px; }
+.settings-card .form-title { text-align: left; }

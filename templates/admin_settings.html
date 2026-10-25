@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Админ-панель — настройки{% endblock %}
+
+{% block content %}
+<section class="section admin-section">
+  <div class="container admin-container">
+
+    {% include "_admin_nav.html" %}
+
+    <div class="settings-card">
+      <h2 class="form-title">Заказы на почту</h2>
+      <p class="form-note">
+        На эти адреса будет приходить письмо о каждом новом заказе. Можно указать несколько адресов
+        через запятую (до 10). Оставьте поле пустым, чтобы отключить письма.
+      </p>
+
+      <form method="post" class="order-form product-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>
+          Почта для заказов
+          <input type="text" name="order_emails" maxlength="2600" inputmode="email"
+                 placeholder="shop@yandex.ru, manager@mail.ru" value="{{ order_emails }}">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn">Сохранить</button>
+        </div>
+      </form>
+
+      <h3 class="form-section">Почтовый ящик отправителя</h3>
+      {% if smtp_problem %}
+        <div class="admin-flash err">{{ smtp_problem }}</div>
+        <p class="form-note">
+          Данные ящика, с которого уходят письма, задаются в файле <code>.env</code>
+          (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD) — инструкция в README.
+          После изменения перезапустите сайт.
+        </p>
+      {% else %}
+        <ul class="settings-list">
+          <li>Сервер: <strong>{{ smtp.host }}:{{ smtp.port }}</strong> ({{ smtp.security }})</li>
+          <li>Отправитель: <strong>{{ smtp.sender }}</strong></li>
+          <li>Пароль: {{ 'задан' if smtp.password else 'не используется' }}</li>
+        </ul>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('admin.settings_test_email') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn-icon"{% if smtp_problem or not order_emails %} disabled{% endif %}>
+          Отправить тестовое письмо
+        </button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

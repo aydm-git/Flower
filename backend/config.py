@@ -54,4 +54,13 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+    # Почтовый ящик, с которого уходят письма о заказах. Адреса получателей
+    # задаются в админке (вкладка «Настройки»).
+    SMTP_HOST = os.environ.get("SMTP_HOST", "")
+    SMTP_PORT = env_int("SMTP_PORT", 465) or 465
+    SMTP_SECURITY = os.environ.get("SMTP_SECURITY", "")
+    SMTP_USER = os.environ.get("SMTP_USER", "")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+    SMTP_FROM = os.environ.get("SMTP_FROM", "")
+
     ORDERS_PER_PAGE = 50
