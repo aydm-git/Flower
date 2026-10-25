@@ -4,6 +4,7 @@
 отправителя (SMTP) — в .env, как и другие секреты.
 """
 import html
+import os
 import re
 import smtplib
 import socket
@@ -74,6 +75,39 @@ def save_order_emails(raw: str):
 
 # --- Настройки SMTP (из .env) ---
 
+def normalize_password(password: str) -> str:
+    """Пароль приложения Google показывается как «abcd efgh ijkl mnop» — убираем пробелы."""
+    password = password.strip()
+    if re.fullmatch(r"(?:[A-Za-z]{4} ){3}[A-Za-z]{4}", password):
+        return password.replace(" ", "")
+    return password
+
+
+def env_hints(settings: dict) -> list:
+    """Подсказки, если настройки почты, похоже, записаны не в тот файл."""
+    env_file = current_app.config.get("ENV_FILE", "")
+    hints = []
+    if env_file and not os.path.exists(env_file):
+        hints.append(
+            f"Файл {env_file} не найден, поэтому сайт не видит настроек. "
+            "Скопируйте .env.example в .env и заполните его"
+        )
+    if not settings["host"] and env_file:
+        example = os.path.join(os.path.dirname(env_file), ".env.example")
+        try:
+            with open(example, encoding="utf-8") as fh:
+                filled = any(re.match(r"\s*SMTP_HOST\s*=\s*\S", line) for line in fh)
+        except OSError:
+            filled = False
+        if filled:
+            hints.append(
+                "Настройки почты вписаны в .env.example — этот файл сайт не читает, это только "
+                f"образец, и он попадает в Git. Перенесите их в {env_file}, очистите значения в "
+                ".env.example и перезапустите сайт"
+            )
+    return hints
+
+
 def smtp_settings() -> dict:
     cfg = current_app.config
     port = cfg.get("SMTP_PORT") or 465
@@ -86,7 +120,7 @@ def smtp_settings() -> dict:
         "port": port,
         "security": security,
         "user": user,
-        "password": cfg.get("SMTP_PASSWORD") or "",
+        "password": normalize_password(cfg.get("SMTP_PASSWORD") or ""),
         "sender": (cfg.get("SMTP_FROM") or "").strip() or user,
     }
 

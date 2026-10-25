@@ -306,7 +306,9 @@ def settings():
             flash(error, "error")
             return render_template(
                 "admin_settings.html", order_emails=raw, smtp=mailer.smtp_settings(),
-                smtp_problem=mailer.smtp_problem(mailer.smtp_settings()), active="settings",
+                smtp_problem=mailer.smtp_problem(mailer.smtp_settings()),
+                env_hints=mailer.env_hints(mailer.smtp_settings()),
+                env_file=current_app.config.get("ENV_FILE", ""), active="settings",
             ), 400
         if emails:
             flash("Почта для заказов сохранена: " + ", ".join(emails), "ok")
@@ -319,6 +321,8 @@ def settings():
         order_emails=", ".join(mailer.get_order_emails()),
         smtp=smtp,
         smtp_problem=mailer.smtp_problem(smtp),
+        env_hints=mailer.env_hints(smtp),
+        env_file=current_app.config.get("ENV_FILE", ""),
         active="settings",
     )
 

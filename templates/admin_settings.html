@@ -28,6 +28,9 @@
       </form>
 
       <h3 class="form-section">Почтовый ящик отправителя</h3>
+      {% for hint in env_hints %}
+        <div class="admin-flash err">{{ hint }}</div>
+      {% endfor %}
       {% if smtp_problem %}
         <div class="admin-flash err">{{ smtp_problem }}</div>
         <p class="form-note">
@@ -42,6 +45,8 @@
           <li>Пароль: {{ 'задан' if smtp.password else 'не используется' }}</li>
         </ul>
       {% endif %}
+
+      {% if env_file %}<p class="form-note">Сайт читает настройки из файла <code>{{ env_file }}</code>.</p>{% endif %}
 
       <form method="post" action="{{ url_for('admin.settings_test_email') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

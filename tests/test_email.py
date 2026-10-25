@@ -227,5 +227,23 @@ class EmailTests(unittest.TestCase):
         self.assertIn("Не задан SMTP_HOST", page)
 
 
+    def test_gmail_app_password_spaces_are_removed(self):
+        self.app.config["SMTP_PASSWORD"] = "abcd efgh ijkl mnop"
+        self.addCleanup(self.app.config.update, SMTP_PASSWORD=self.PASSWORD)
+        self.assertEqual(self.mailer.smtp_settings()["password"], "abcdefghijklmnop")
+        self.app.config["SMTP_PASSWORD"] = "pass with spaces 1"
+        self.assertEqual(self.mailer.smtp_settings()["password"], "pass with spaces 1")
+
+    def test_settings_explain_env_example_mistake(self):
+        root = Path(self.temporary.name) / "project"
+        root.mkdir(exist_ok=True)
+        (root / ".env.example").write_text("SMTP_HOST=smtp.gmail.com\n", encoding="utf-8")
+        self.app.config.update(SMTP_HOST="", ENV_FILE=str(root / ".env"))
+        self.addCleanup(self.app.config.update, SMTP_HOST="smtp.yandex.ru", ENV_FILE="")
+        page = self.client.get("/admin/settings").get_data(as_text=True)
+        self.assertIn("не найден", page)
+        self.assertIn("вписаны в .env.example", page)
+        self.assertIn(str(root / ".env"), page)
+
 if __name__ == "__main__":
     unittest.main()

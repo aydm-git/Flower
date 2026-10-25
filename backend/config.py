@@ -4,7 +4,8 @@ from datetime import timedelta
 from dotenv import load_dotenv
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-load_dotenv(os.path.join(BASE_DIR, ".env"))
+ENV_FILE = os.path.join(BASE_DIR, ".env")
+load_dotenv(ENV_FILE)
 
 MAX_QTY = 99
 MAX_STOCK = 10_000
@@ -56,6 +57,7 @@ class Config:
 
     # Почтовый ящик, с которого уходят письма о заказах. Адреса получателей
     # задаются в админке (вкладка «Настройки»).
+    ENV_FILE = ENV_FILE
     SMTP_HOST = os.environ.get("SMTP_HOST", "")
     SMTP_PORT = env_int("SMTP_PORT", 465) or 465
     SMTP_SECURITY = os.environ.get("SMTP_SECURITY", "")
