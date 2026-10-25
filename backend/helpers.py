@@ -3,9 +3,11 @@ import json
 import os
 import re
 import secrets
+import socket
 import threading
 import time
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import requests
@@ -565,6 +567,47 @@ NO_CONNECTION_MESSAGE = (
 )
 
 
+PROXY_DEFAULT_PORTS = {"http": 80, "https": 443, "socks4": 1080, "socks4a": 1080,
+                       "socks5": 1080, "socks5h": 1080}
+
+
+def proxy_address(proxy_url: str):
+    """(хост, порт, адрес для показа без логина и пароля) или None, если адрес не разобрать."""
+    try:
+        parts = urlsplit(proxy_url)
+        port = parts.port or PROXY_DEFAULT_PORTS.get(parts.scheme.lower())
+    except ValueError:
+        return None
+    if not parts.hostname or not port:
+        return None
+    return parts.hostname, port, f"{parts.scheme}://{parts.hostname}:{port}"
+
+
+def proxy_through_message(proxy_url: str) -> str:
+    address = proxy_address(proxy_url)
+    shown = address[2] if address else "из TELEGRAM_PROXY"
+    return (
+        f"Нет связи с api.telegram.org через прокси {shown} (тайм-аут или обрыв соединения): "
+        "прокси не запущен или сам не имеет доступа к Telegram"
+    )
+
+
+def probe_proxy(proxy_url: str) -> str:
+    """Проверяет, что по адресу прокси вообще кто-то отвечает. '' — порт открыт."""
+    address = proxy_address(proxy_url)
+    if address is None:
+        return "Неверный адрес прокси в TELEGRAM_PROXY"
+    host, port, shown = address
+    try:
+        with socket.create_connection((host, port), timeout=5):
+            return ""
+    except OSError:
+        return (
+            f"Прокси {shown} не отвечает: по этому адресу ничего не запущено или порт закрыт. "
+            "Запустите прокси-программу или укажите в TELEGRAM_PROXY адрес рабочего прокси"
+        )
+
+
 def telegram_settings():
     token = current_app.config.get("TELEGRAM_BOT_TOKEN", "").strip()
     raw_ids = current_app.config.get("TELEGRAM_CHAT_ID", "")
@@ -593,13 +636,14 @@ def telegram_call(token: str, method: str, payload: dict):
         return None, "Неверный адрес прокси в TELEGRAM_PROXY", False
     except requests.exceptions.ProxyError:
         if proxy_url:
-            return None, "Прокси из TELEGRAM_PROXY недоступен или отклонил соединение", True
+            return None, proxy_through_message(proxy_url), True
         return None, (
             "Системный прокси (переменная окружения HTTPS_PROXY) не пропустил соединение "
             "с api.telegram.org — укажите рабочий прокси в TELEGRAM_PROXY"
         ), True
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-        return None, NO_CONNECTION_MESSAGE, True
+        # Ошибки SOCKS-прокси приходят как ConnectionError, а не ProxyError.
+        return None, proxy_through_message(proxy_url) if proxy_url else NO_CONNECTION_MESSAGE, True
     except requests.exceptions.RequestException as exc:
         return None, f"Ошибка запроса к Telegram ({type(exc).__name__})", True
 
@@ -725,9 +769,23 @@ def check_telegram() -> list:
         return [(False, "Не задан TELEGRAM_BOT_TOKEN в .env")]
     if not chat_ids:
         return [(False, "Не задан TELEGRAM_CHAT_ID в .env")]
-    proxy = "через прокси TELEGRAM_PROXY" if os.environ.get("TELEGRAM_PROXY", "").strip() else "без прокси"
+    proxy_url = os.environ.get("TELEGRAM_PROXY", "").strip()
+    address = proxy_address(proxy_url) if proxy_url else None
+    proxy = f"через прокси {address[2]}" if address else (
+        "через прокси TELEGRAM_PROXY" if proxy_url else "без прокси"
+    )
     me, error, _ = telegram_call(token, "getMe", {})
     if error:
+        if proxy_url and error == proxy_through_message(proxy_url):
+            # Уточняем: прокси не запущен или запущен, но не видит Telegram.
+            probe_error = probe_proxy(proxy_url)
+            if probe_error:
+                return [(False, f"Бот недоступен: {probe_error}")]
+            return [(False, (
+                f"Бот недоступен: прокси {address[2] if address else ''} отвечает, но через него "
+                "нет связи с api.telegram.org. Похоже, прокси находится в стране, где Telegram "
+                "заблокирован, или не пропускает такие соединения — нужен другой прокси (за рубежом)"
+            ))]
         return [(False, f"Бот недоступен ({proxy}): {error}")]
     username = me.get("username", "?") if isinstance(me, dict) else "?"
     results = [(True, f"Связь с Telegram есть ({proxy}), бот @{username}")]

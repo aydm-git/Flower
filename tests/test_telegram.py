@@ -178,7 +178,48 @@ class TelegramTests(unittest.TestCase):
             self.assertIn("HTTPS_PROXY", message)
             with patch.dict(os.environ, {"TELEGRAM_PROXY": "http://proxy:3128"}):
                 _, message, _ = self.helpers.telegram_call(self.TOKEN, "getMe", {})
-        self.assertIn("TELEGRAM_PROXY недоступен", message)
+        self.assertIn("через прокси http://proxy:3128", message)
+
+    def test_timeout_through_proxy_blames_proxy_and_hides_credentials(self):
+        import requests
+        with patch.dict(os.environ, {"TELEGRAM_PROXY": "socks5h://user:pa55@10.0.0.5:1080"}), \
+                patch.object(self.helpers.requests, "post",
+                             side_effect=requests.exceptions.ConnectionError("SOCKS failed")):
+            _, message, retryable = self.helpers.telegram_call(self.TOKEN, "getMe", {})
+        self.assertIn("socks5h://10.0.0.5:1080", message)
+        self.assertNotIn("pa55", message)
+        self.assertNotIn("укажите прокси", message)
+        self.assertTrue(retryable)
+
+    def test_check_reports_proxy_that_is_not_running(self):
+        import socket
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        import requests
+        with patch.dict(os.environ, {"TELEGRAM_PROXY": f"socks5h://127.0.0.1:{port}"}), \
+                patch.object(self.helpers.requests, "post",
+                             side_effect=requests.exceptions.ConnectionError("refused")):
+            results = self.helpers.check_telegram()
+        text = " ".join(message for _, message in results)
+        self.assertFalse(results[0][0])
+        self.assertIn(f"127.0.0.1:{port}", text)
+        self.assertIn("не отвечает", text)
+
+    def test_check_reports_proxy_without_access_to_telegram(self):
+        import socket
+        import requests
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen()
+            port = server.getsockname()[1]
+            with patch.dict(os.environ, {"TELEGRAM_PROXY": f"socks5h://127.0.0.1:{port}"}), \
+                    patch.object(self.helpers.requests, "post",
+                                 side_effect=requests.exceptions.ConnectTimeout("timeout")):
+                results = self.helpers.check_telegram()
+        text = " ".join(message for _, message in results)
+        self.assertIn("отвечает", text)
+        self.assertIn("через него нет связи с api.telegram.org", text)
 
     def test_disabled_integration_is_marked(self):
         self.app.config["TELEGRAM_BOT_TOKEN"] = ""
