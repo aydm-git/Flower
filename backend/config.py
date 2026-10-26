@@ -52,9 +52,6 @@ class Config:
     ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
     ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
-    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-
     # Почтовый ящик, с которого уходят письма о заказах. Адреса получателей
     # задаются в админке (вкладка «Настройки»).
     ENV_FILE = ENV_FILE

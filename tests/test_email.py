@@ -64,8 +64,6 @@ class EmailTests(unittest.TestCase):
                     Path(cls.temporary.name) / "email.db"
                 ).replace("\\", "/")
                 UPLOAD_DIR = cls.temporary.name
-                TELEGRAM_BOT_TOKEN = ""
-                TELEGRAM_CHAT_ID = ""
                 SMTP_HOST = "smtp.yandex.ru"
                 SMTP_PORT = 465
                 SMTP_SECURITY = ""

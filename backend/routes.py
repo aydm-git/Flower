@@ -10,8 +10,7 @@ import mailer
 from config import MAX_STOCK
 from helpers import (
     CLOSING_HOUR, OPENING_HOUR, POPULAR_LIMIT, STATUS_TRANSITIONS, by_popularity,
-    change_order_status, check_telegram, clean_order_token, product_sales,
-    order_admin_url, resend_order_notification,
+    change_order_status, clean_order_token, product_sales, order_admin_url,
     delete_image_file, delivery_date_limits, new_order_token, parse_iso_date, place_order,
     read_cart, register_failed_login, reset_attempts, save_image, shop_now, slot_options,
     too_many_attempts, validate_order_form, validate_product_form,
@@ -243,7 +242,6 @@ def order_list():
             Order.date.like(now.strftime("%Y-%m") + "-%")
         ).scalar(),
         "month_name": MONTHS[now.month - 1],
-        "notify_failed": Order.query.filter_by(notify_status="failed").count(),
         "email_failed": Order.query.filter_by(email_status="failed").count(),
     }
     pagination = query.order_by(Order.id.desc()).paginate(
@@ -271,18 +269,6 @@ def order_status(order_id):
         flash(f"Заказ №{order_id}: статус «{STATUSES[new_status]}»", "ok")
     else:
         flash(error, "error")
-    return _back_to_orders()
-
-
-@admin_bp.route("/orders/<int:order_id>/notify", methods=["POST"])
-def order_notify(order_id):
-    order = db.get_or_404(Order, order_id)
-    errors = resend_order_notification(order)
-    if errors:
-        for error in errors:
-            flash(f"Заказ №{order_id}: {error}", "error")
-    else:
-        flash(f"Заказ №{order_id} отправлен в Telegram", "ok")
     return _back_to_orders()
 
 
@@ -335,13 +321,6 @@ def settings_test_email():
     else:
         flash("Тестовое письмо отправлено: " + ", ".join(mailer.get_order_emails()), "ok")
     return redirect(url_for("admin.settings"))
-
-
-@admin_bp.route("/telegram/check", methods=["POST"])
-def telegram_check():
-    for ok, message in check_telegram():
-        flash(f"Telegram: {message}", "ok" if ok else "error")
-    return _back_to_orders()
 
 
 @admin_bp.route("/orders/<int:order_id>/delete", methods=["POST"])

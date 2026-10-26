@@ -1,16 +1,11 @@
-import html
 import json
 import os
 import re
 import secrets
-import socket
-import threading
 import time
 from datetime import datetime, timedelta
-from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-import requests
 from flask import current_app
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -365,10 +360,8 @@ def place_order(data: dict, cart: dict, expected_prices: dict = None, client_tok
             for p, q in lines
         ]
         now = shop_now().strftime("%Y-%m-%d %H:%M:%S")
-        token, chat_ids = telegram_settings()
         order = Order(
             date=now, flower=flower, total=total, items=items, client_token=client_token,
-            notify_status="pending" if token and chat_ids else "off",
             email_status="pending" if mailer.email_enabled() else "off", **data,
         )
         db.session.add(order)
@@ -389,7 +382,6 @@ def place_order(data: dict, cart: dict, expected_prices: dict = None, client_tok
         db.session.rollback()
         return 0, "Произошла ошибка. Попробуйте позже."
 
-    notify_new_order(order)
     mailer.notify_order_email(order, order_admin_url(order.id))
     return total, ""
 
@@ -526,287 +518,6 @@ def change_order_status(order, new_status):
         db.session.rollback()
         return "Не удалось изменить статус. Попробуйте позже."
     return ""
-
-
-# Лимит Telegram — 4096 символов; оставляем запас на эмодзи (2 UTF-16 единицы).
-TELEGRAM_TEXT_LIMIT = 4000
-TRUNCATED_SUFFIX = "… (полный состав — в админке)"
-
-
-def _order_message(order, flower: str) -> str:
-    esc = html.escape
-    lines = [
-        f"<b>Новый заказ №{order.id}</b>",
-        "",
-        f"Имя: {esc(order.name)}",
-        f"Телефон: {esc(order.phone)}",
-        f"Букет: {esc(flower)}",
-        f"Сумма: {order.total} ₽",
-        "",
-    ]
-    if order.is_pickup:
-        lines.append("Самовывоз")
-    else:
-        lines.append(f"Адрес: {esc(order.address)}")
-    lines.append(f"Когда: {order.delivery_date_ru}, {esc(order.delivery_time)}")
-    if order.card_text:
-        lines.append(f"Открытка: {esc(order.card_text)}")
-    if order.comment:
-        lines.append(f"Комментарий: {esc(order.comment)}")
-    return "\n".join(lines)
-
-
-def format_order_message(order) -> str:
-    flower = order.flower or ""
-    text = _order_message(order, flower)
-    if len(text) <= TELEGRAM_TEXT_LIMIT:
-        return text
-    # Обрезаем исходный текст (а не экранированный), чтобы не разрезать HTML-сущность.
-    budget = len(flower) - (len(text) - TELEGRAM_TEXT_LIMIT) - len(TRUNCATED_SUFFIX)
-    while budget > 0:
-        text = _order_message(order, flower[:budget].rstrip() + TRUNCATED_SUFFIX)
-        if len(text) <= TELEGRAM_TEXT_LIMIT:
-            return text
-        budget -= len(text) - TELEGRAM_TEXT_LIMIT
-    return _order_message(order, TRUNCATED_SUFFIX.lstrip("… "))
-
-
-TELEGRAM_RETRY_DELAYS = (5, 30)  # паузы перед 2-й и 3-й попыткой, секунды
-NO_CONNECTION_MESSAGE = (
-    "Нет связи с api.telegram.org (тайм-аут или обрыв соединения). Вероятно, Telegram "
-    "заблокирован провайдером сервера — укажите прокси в TELEGRAM_PROXY."
-)
-
-
-PROXY_DEFAULT_PORTS = {"http": 80, "https": 443, "socks4": 1080, "socks4a": 1080,
-                       "socks5": 1080, "socks5h": 1080}
-
-
-def proxy_address(proxy_url: str):
-    """(хост, порт, адрес для показа без логина и пароля) или None, если адрес не разобрать."""
-    try:
-        parts = urlsplit(proxy_url)
-        port = parts.port or PROXY_DEFAULT_PORTS.get(parts.scheme.lower())
-    except ValueError:
-        return None
-    if not parts.hostname or not port:
-        return None
-    return parts.hostname, port, f"{parts.scheme}://{parts.hostname}:{port}"
-
-
-def proxy_through_message(proxy_url: str) -> str:
-    address = proxy_address(proxy_url)
-    shown = address[2] if address else "из TELEGRAM_PROXY"
-    return (
-        f"Нет связи с api.telegram.org через прокси {shown} (тайм-аут или обрыв соединения): "
-        "прокси не запущен или сам не имеет доступа к Telegram"
-    )
-
-
-def probe_proxy(proxy_url: str) -> str:
-    """Проверяет, что по адресу прокси вообще кто-то отвечает. '' — порт открыт."""
-    address = proxy_address(proxy_url)
-    if address is None:
-        return "Неверный адрес прокси в TELEGRAM_PROXY"
-    host, port, shown = address
-    try:
-        with socket.create_connection((host, port), timeout=5):
-            return ""
-    except OSError:
-        return (
-            f"Прокси {shown} не отвечает: по этому адресу ничего не запущено или порт закрыт. "
-            "Запустите прокси-программу или укажите в TELEGRAM_PROXY адрес рабочего прокси"
-        )
-
-
-def telegram_settings():
-    token = current_app.config.get("TELEGRAM_BOT_TOKEN", "").strip()
-    raw_ids = current_app.config.get("TELEGRAM_CHAT_ID", "")
-    chat_ids = [c.strip() for c in raw_ids.split(",") if c.strip()]
-    return token, chat_ids
-
-
-def telegram_call(token: str, method: str, payload: dict):
-    """Один запрос к Bot API. Возвращает (result, ошибка, стоит_ли_повторять).
-
-    Текст ошибки понятен администратору и никогда не содержит токен бота.
-    """
-    url = f"https://api.telegram.org/bot{token}/{method}"
-    proxy_url = os.environ.get("TELEGRAM_PROXY", "").strip()
-    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-    try:
-        response = requests.post(url, data=payload, proxies=proxies, timeout=15)
-    except requests.exceptions.InvalidSchema as exc:
-        if "socks" in str(exc).lower():
-            return None, (
-                "Для SOCKS-прокси не установлен PySocks: выполните "
-                "pip install -r requirements.txt"
-            ), False
-        return None, "Неверный адрес прокси в TELEGRAM_PROXY", False
-    except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
-        return None, "Неверный адрес прокси в TELEGRAM_PROXY", False
-    except requests.exceptions.ProxyError:
-        if proxy_url:
-            return None, proxy_through_message(proxy_url), True
-        return None, (
-            "Системный прокси (переменная окружения HTTPS_PROXY) не пропустил соединение "
-            "с api.telegram.org — укажите рабочий прокси в TELEGRAM_PROXY"
-        ), True
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-        # Ошибки SOCKS-прокси приходят как ConnectionError, а не ProxyError.
-        return None, proxy_through_message(proxy_url) if proxy_url else NO_CONNECTION_MESSAGE, True
-    except requests.exceptions.RequestException as exc:
-        return None, f"Ошибка запроса к Telegram ({type(exc).__name__})", True
-
-    try:
-        body = response.json()
-    except ValueError:
-        body = {}
-    if not isinstance(body, dict):
-        body = {}
-    if response.status_code == 200 and body.get("ok"):
-        return body.get("result"), "", False
-
-    code = response.status_code
-    description = str(body.get("description") or "")[:200]
-    parameters = body.get("parameters") if isinstance(body.get("parameters"), dict) else {}
-    if parameters.get("migrate_to_chat_id"):
-        return None, (
-            "Группа стала супергруппой: замените ID чата в TELEGRAM_CHAT_ID "
-            f"на {parameters['migrate_to_chat_id']}"
-        ), False
-    if code in (401, 404):
-        return None, "Неверный TELEGRAM_BOT_TOKEN: Telegram не узнал бота", False
-    if code == 400 and "chat not found" in description.lower():
-        return None, (
-            "Чат не найден: проверьте TELEGRAM_CHAT_ID; бот должен быть добавлен в группу, "
-            "а в личном чате нужно сначала нажать /start"
-        ), False
-    if code == 403:
-        return None, (
-            f"Бот не может писать в этот чат (заблокирован или удалён из группы): {description}"
-        ), False
-    if code == 429:
-        return None, "Telegram временно ограничил частоту отправки", True
-    if code >= 500:
-        return None, f"Сервер Telegram временно недоступен (код {code})", True
-    return None, f"Telegram отклонил сообщение (код {code}): {description}", False
-
-
-def send_message(token: str, chat_id: str, text: str, retry_delays=None) -> str:
-    """Отправка в один чат с повторами при временных сбоях. Возвращает текст ошибки или ''."""
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "link_preview_options": json.dumps({"is_disabled": True}),
-    }
-    if retry_delays is None:
-        retry_delays = TELEGRAM_RETRY_DELAYS
-    error = ""
-    for delay in (0, *retry_delays):
-        if delay:
-            time.sleep(delay)
-        _, error, retryable = telegram_call(token, "sendMessage", payload)
-        if not error or not retryable:
-            break
-    return error
-
-
-def deliver_order_notification(app, order_id: int, token: str, chat_ids: list, text: str,
-                               retry_delays=None) -> list:
-    """Отправляет заказ во все чаты и сохраняет результат в заказе. Возвращает список ошибок."""
-    errors = []
-    for chat_id in chat_ids:
-        try:
-            error = send_message(token, chat_id, text, retry_delays)
-        except Exception as exc:
-            # Любой сбой должен попасть в статус заказа, а не оставить его «отправляется».
-            error = f"внутренняя ошибка отправки ({type(exc).__name__})"
-            app.logger.exception("Telegram: сбой при отправке заказа №%s", order_id)
-        if error:
-            errors.append(f"чат {chat_id}: {error}")
-            app.logger.error("Telegram: заказ №%s не отправлен в чат %s: %s", order_id, chat_id, error)
-    with app.app_context():
-        try:
-            db.session.execute(
-                update(Order).where(Order.id == order_id).values(
-                    notify_status="failed" if errors else "sent",
-                    notify_error="; ".join(errors)[:500],
-                ),
-                execution_options={"synchronize_session": False},
-            )
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            app.logger.exception("Не удалось сохранить статус уведомления заказа №%s", order_id)
-    return errors
-
-
-def start_background(target, *args) -> None:
-    threading.Thread(target=target, args=args, daemon=True).start()
-
-
-def notify_new_order(order) -> None:
-    token, chat_ids = telegram_settings()
-    if not token or not chat_ids:
-        return
-    try:
-        text = format_order_message(order)
-    except Exception:
-        current_app.logger.exception("Не удалось собрать сообщение для Telegram")
-        return
-    start_background(
-        deliver_order_notification,
-        current_app._get_current_object(), order.id, token, chat_ids, text,
-    )
-
-
-def resend_order_notification(order) -> list:
-    """Повторная отправка из админки: сразу, одна попытка на чат."""
-    token, chat_ids = telegram_settings()
-    if not token or not chat_ids:
-        return ["Уведомления не настроены: задайте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в .env"]
-    return deliver_order_notification(
-        current_app._get_current_object(), order.id, token, chat_ids,
-        format_order_message(order), retry_delays=(),
-    )
-
-
-def check_telegram() -> list:
-    """Диагностика для админки: [(успех, сообщение), ...]."""
-    token, chat_ids = telegram_settings()
-    if not token:
-        return [(False, "Не задан TELEGRAM_BOT_TOKEN в .env")]
-    if not chat_ids:
-        return [(False, "Не задан TELEGRAM_CHAT_ID в .env")]
-    proxy_url = os.environ.get("TELEGRAM_PROXY", "").strip()
-    address = proxy_address(proxy_url) if proxy_url else None
-    proxy = f"через прокси {address[2]}" if address else (
-        "через прокси TELEGRAM_PROXY" if proxy_url else "без прокси"
-    )
-    me, error, _ = telegram_call(token, "getMe", {})
-    if error:
-        if proxy_url and error == proxy_through_message(proxy_url):
-            # Уточняем: прокси не запущен или запущен, но не видит Telegram.
-            probe_error = probe_proxy(proxy_url)
-            if probe_error:
-                return [(False, f"Бот недоступен: {probe_error}")]
-            return [(False, (
-                f"Бот недоступен: прокси {address[2] if address else ''} отвечает, но через него "
-                "нет связи с api.telegram.org. Похоже, прокси находится в стране, где Telegram "
-                "заблокирован, или не пропускает такие соединения — нужен другой прокси (за рубежом)"
-            ))]
-        return [(False, f"Бот недоступен ({proxy}): {error}")]
-    username = me.get("username", "?") if isinstance(me, dict) else "?"
-    results = [(True, f"Связь с Telegram есть ({proxy}), бот @{username}")]
-    for chat_id in chat_ids:
-        error = send_message(
-            token, chat_id, "Проверка уведомлений «Чечектер»: этот чат получает новые заказы.",
-            retry_delays=(),
-        )
-        results.append((not error, f"Чат {chat_id}: " + (error or "тестовое сообщение отправлено")))
-    return results
 
 
 def detect_image_ext(stream):

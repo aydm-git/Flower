@@ -52,8 +52,6 @@ class FixTests(unittest.TestCase):
                     Path(cls.temporary.name) / "fixes.db"
                 ).replace("\\", "/")
                 UPLOAD_DIR = cls.temporary.name
-                TELEGRAM_BOT_TOKEN = ""
-                TELEGRAM_CHAT_ID = ""
                 SHOP_TIMEZONE = "Asia/Novosibirsk"
                 ORDERS_PER_PAGE = 50
 
@@ -215,28 +213,6 @@ class FixTests(unittest.TestCase):
         self.assertIn("Клиент 04", second)
         self.assertEqual(self.client.get("/admin?page=99999999999999999999").status_code, 200)
 
-    # --- С-9: Telegram ---
-    def test_long_telegram_message_is_truncated_without_breaking_html(self):
-        order = self.buy()
-        order.flower = ", ".join(f"Букет & Co №{i} (99 шт)" for i in range(400))
-        text = self.helpers.format_order_message(order)
-        self.assertLessEqual(len(text), self.helpers.TELEGRAM_TEXT_LIMIT)
-        self.assertIn("полный состав — в админке", text)
-        self.assertNotRegex(text, r"&(?!amp;|lt;|gt;|quot;|#x27;)")
-
-    def test_telegram_error_reports_status_code(self):
-        class Response:
-            status_code = 400
-
-            def json(self):
-                return {"ok": False, "description": "Bad Request: can't parse entities"}
-
-        with patch.object(self.helpers.requests, "post", return_value=Response()):
-            _, error, retryable = self.helpers.telegram_call("t", "sendMessage", {})
-        self.assertIn("код 400", error)
-        self.assertFalse(retryable)
-
-    # --- Н-1 / Н-6: фото ---
     def test_image_with_appended_payload_is_rejected(self):
         good, bad = tiny_png(), tiny_png() + b"<script>alert(1)</script>"
         response = self.client.post("/admin/products/new", data={
@@ -433,6 +409,19 @@ class FixTests(unittest.TestCase):
         listing = self.client.get("/catalog").get_data(as_text=True)
         self.assertEqual(listing.count("badge-hit"), 2)
 
+
+    def test_old_telegram_columns_are_dropped_and_orders_still_work(self):
+        from sqlalchemy import inspect, text
+        with self.db.engine.begin() as connection:
+            # Так эти колонки создавал create_all в версии с Telegram: NOT NULL без DEFAULT.
+            connection.execute(text('ALTER TABLE "order" ADD COLUMN notify_status VARCHAR(20)'))
+            connection.execute(text('ALTER TABLE "order" ADD COLUMN notify_error VARCHAR(500)'))
+        self.models.ensure_schema()
+        columns = {c["name"] for c in inspect(self.db.engine).get_columns("order")}
+        self.assertNotIn("notify_status", columns)
+        self.assertNotIn("notify_error", columns)
+        self.buy()
+        self.models.ensure_schema()  # повторный запуск ничего не ломает
 
 if __name__ == "__main__":
     unittest.main()

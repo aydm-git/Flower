@@ -59,11 +59,8 @@ class Order(db.Model):
     comment = db.Column(db.String(500), nullable=False, default="")
     # Одноразовый токен формы: повторная отправка не создаёт второй заказ.
     client_token = db.Column(db.String(64), nullable=True, unique=True, index=True)
-    # Уведомление в Telegram: off — не настроено, pending — отправляется,
-    # sent — доставлено во все чаты, failed — ошибка (причина в notify_error).
-    notify_status = db.Column(db.String(20), nullable=False, default="")
-    notify_error = db.Column(db.String(500), nullable=False, default="")
-    # Письмо о заказе на почту из настроек админки: те же статусы, что и у Telegram.
+    # Письмо о заказе на почту из настроек админки: off — не настроено,
+    # pending — отправляется, sent — отправлено, failed — ошибка (причина в email_error).
     email_status = db.Column(db.String(20), nullable=False, default="")
     email_error = db.Column(db.String(500), nullable=False, default="")
 
@@ -159,6 +156,23 @@ def add_column_if_missing(model, column_name: str, ddl: str) -> bool:
             return False  # другой worker уже добавил колонку
         raise
 
+def drop_column_if_present(model, column_name: str) -> bool:
+    columns = {c["name"] for c in inspect(db.engine).get_columns(model.__tablename__)}
+    if column_name not in columns:
+        return False
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text(f'ALTER TABLE "{model.__tablename__}" DROP COLUMN "{column_name}"'))
+        return True
+    except OperationalError as e:
+        if "no such column" in str(e).lower():
+            return False  # другой worker уже удалил колонку
+        raise RuntimeError(
+            f"Не удалось удалить устаревшую колонку {model.__tablename__}.{column_name}: {e}. "
+            "Нужен SQLite 3.35 или новее (обновите Python)."
+        ) from e
+
+
 def ensure_schema() -> None:
     first_products_run = not inspect(db.engine).has_table(Product.__tablename__)
     db.create_all()
@@ -174,13 +188,15 @@ def ensure_schema() -> None:
         "card_text": "card_text VARCHAR(300) NOT NULL DEFAULT ''",
         "comment": "comment VARCHAR(500) NOT NULL DEFAULT ''",
         "client_token": "client_token VARCHAR(64)",
-        "notify_status": "notify_status VARCHAR(20) NOT NULL DEFAULT ''",
-        "notify_error": "notify_error VARCHAR(500) NOT NULL DEFAULT ''",
         "email_status": "email_status VARCHAR(20) NOT NULL DEFAULT ''",
         "email_error": "email_error VARCHAR(500) NOT NULL DEFAULT ''",
     }
     for column_name, ddl in new_order_columns.items():
         add_column_if_missing(Order, column_name, ddl)
+    # Уведомления в Telegram убраны. В базах, созданных при них, эти колонки
+    # объявлены NOT NULL без значения по умолчанию и мешали бы сохранять заказы.
+    for column_name in ("notify_status", "notify_error"):
+        drop_column_if_present(Order, column_name)
 
     with db.engine.begin() as conn:
         conn.execute(text('CREATE INDEX IF NOT EXISTS ix_order_status ON "order" (status)'))

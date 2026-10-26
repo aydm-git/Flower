@@ -31,8 +31,6 @@ class OrderTests(unittest.TestCase):
                     Path(cls.temporary.name) / "orders.db"
                 ).replace("\\", "/")
                 UPLOAD_DIR = cls.temporary.name
-                TELEGRAM_BOT_TOKEN = ""
-                TELEGRAM_CHAT_ID = ""
                 SHOP_TIMEZONE = "Asia/Novosibirsk"
 
             cls.app = create_app(TestConfig)

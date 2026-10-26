@@ -2,8 +2,7 @@ import re
 import unittest
 from pathlib import Path
 
-SECRETS = ("SECRET_KEY", "ADMIN_PASSWORD_HASH", "TELEGRAM_BOT_TOKEN", "TELEGRAM_PROXY",
-           "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_HOST")
+SECRETS = ("SECRET_KEY", "ADMIN_PASSWORD_HASH", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_HOST")
 
 
 class EnvExampleTests(unittest.TestCase):
